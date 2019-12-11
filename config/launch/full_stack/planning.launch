@@ -34,4 +34,13 @@
     <node pkg="zzz_control_latlon_controllers" type="pure_persuit"
           name="latlon_controller" output="screen" ns="/zzz/control">
     </node>
+
+    <group if="$(arg enable_lidar)">
+        <node pkg="zzz_perception_detection_lidar_filters" type="extrinsic"
+            name="extrinsic_filter" output="screen" ns="/zzz/perception">
+            <param name="input_topic" value="$(arg lidar_topic)"/>
+            <param name="output_topic" value="points_transformed"/>
+            <param name="target_frame" value="ego_vehicle"/>
+        </node>
+    </group>
 </launch>
