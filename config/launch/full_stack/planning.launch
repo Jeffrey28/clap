@@ -1,8 +1,12 @@
 <!-- Planning & Control -->
 <launch>
+    <arg name="enable_lidar" default="true"/>
+    
     <arg name="odom_topic" default="/carla/ego_vehicle/odometry"/>
     <arg name="waypoint_topic" default="/carla/ego_vehicle/waypoints"/>
     <arg name="objects_topic" default="/zzz/perception/objects_tracked"/>
+    <arg name="lidar_topic" default="/carla/ego_vehicle/lidar/Lidar/point_cloud"/>
+
 
     <node pkg="zzz_navigation_pose_reporter" type="manual"
           name="pose_reporter" output="screen" ns="/zzz/navigation">
@@ -28,19 +32,17 @@
     <node pkg="zzz_planning_decision_lane_models" type="idm_lane_utility"
           name="idm_lane_utility" output="screen" ns="/zzz/planning">
     </node>
-    <node pkg="zzz_planning_decision_safeguard" type="reachable_set"
-          name="safeguard" output="screen" ns="/zzz/planning">
-    </node>
+    <group if="$(arg enable_lidar)">
+      <node pkg="zzz_planning_decision_safeguard" type="reachable_set"
+             name="safeguard" output="screen" ns="/zzz/planning">
+             <param name="input_topic" value="$(arg lidar_topic)"/>
+             <param name="output_topic" value="points_transformed"/>
+             <param name="target_frame" value="ego_vehicle"/>
+          </node>
+    </group>
+
     <node pkg="zzz_control_latlon_controllers" type="pure_persuit"
           name="latlon_controller" output="screen" ns="/zzz/control">
     </node>
 
-    <group if="$(arg enable_lidar)">
-        <node pkg="zzz_perception_detection_lidar_filters" type="extrinsic"
-            name="extrinsic_filter" output="screen" ns="/zzz/perception">
-            <param name="input_topic" value="$(arg lidar_topic)"/>
-            <param name="output_topic" value="points_transformed"/>
-            <param name="target_frame" value="ego_vehicle"/>
-        </node>
-    </group>
 </launch>
