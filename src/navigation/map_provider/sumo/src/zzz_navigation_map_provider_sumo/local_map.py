@@ -69,8 +69,6 @@ class LocalMap(object):
             exitcode = command.wait()
             if exitcode != 0:
                 rospy.logerr("SUMO netconvert failed, (exit code: %d)" % exitcode)
-            else:
-                rospy.logdebug("SUMO netconvert succeed, stderr:\n %s", command.stderr.read())
 
         self._hdmap = sumolib.net.readNet(converted_file)
         self._offset_x, self._offset_y = self._hdmap.getLocationOffset()
@@ -120,9 +118,9 @@ class LocalMap(object):
     def receive_new_pose(self, x, y):
         self._ego_vehicle_x = x
         self._ego_vehicle_y = y
-        #print("                  wait: should update static map?")
         if self.should_update_static_map():
             self.update_static_map()
+            return self.static_local_map
         return None
 
     def should_update_static_map(self):
@@ -142,8 +140,6 @@ class LocalMap(object):
             if self._current_edge_id is None or new_edge.id != self._current_edge_id:
                 rospy.loginfo("Should update static map, edge id %s -> %s", self._current_edge_id, new_edge.id)
                 return True
-
-        rospy.logdebug("Won't update static map, current edge id %s\n\n\n\n", self._current_edge_id)
         return False
 
     def init_static_map(self):
@@ -171,8 +167,6 @@ class LocalMap(object):
         rospy.loginfo("Updated static map info: lane_number = %d, in_junction = %d, current_edge_id = %s, target_lane_index = %s",
             len(self.static_local_map.lanes), int(self.static_local_map.in_junction),
             self._current_edge_id, self.static_local_map.target_lane_index)
-        #print("Check update: ego_map_location = (%f, %f), ego_location = (%f, %f)",
-        #    map_x, map_y, self._ego_vehicle_x, self._ego_vehicle_y)
 
     def update_lane_list(self):
         '''
@@ -198,42 +192,6 @@ class LocalMap(object):
                 self.static_local_map.lanes.append(lane_wrapped)
 
     def wrap_lane(self, lane):
-        '''
-        Wrap lane information into ROS message
-        '''
-        lane_wrapped = Lane()
-        lane_wrapped.index = lane.getIndex()
-        # lane_wrapped.width = lane.getWidth()
-        last_x = last_y = last_s = None
-
-        discrete_points = []
-        if len(lane.getShape()) <= 2:
-            point_list = [(wp[0], wp[1]) for wp in lane.getShape()]
-            points_array = np.array(point_list)
-            discrete_points = dense_polyline2d(points_array, 2)  
-        else:
-            discrete_points = lane.getShape()
-
-        for wp in discrete_points:
-            point = LanePoint()
-            x, y = self.convert_to_origin_XY(wp[0], wp[1])
-            # Calculate mileage
-            if last_s is None:
-                point.s = 0
-            else:
-                point.s = last_s + math.sqrt((x-last_x)*(x-last_x) + (y-last_y)*(y-last_y))
-            point.position.x = x
-            point.position.y = y
-            # TODO: add more lane point info
-
-            # Update
-            last_s = point.s
-            last_x = point.position.x
-            last_y = point.position.y
-            lane_wrapped.central_path_points.append(point)
-        return lane_wrapped            
-
-    def wrap_lane2(self, lane):
         '''
         Wrap lane information into ROS message
         '''

@@ -35,6 +35,7 @@ class PathBuffer:
 
         self._rerouting_trigger = None
         self._rerouting_sent = False
+        self._debug = True
 
     def set_rerouting_trigger(self, trigger):
         self._rerouting_trigger = trigger
@@ -53,6 +54,8 @@ class PathBuffer:
     def receive_reference_path(self, reference_path):
         # TODO: Define a custom reference_path?
         assert type(reference_path) == Path
+        if self._debug:
+            print("#### PathBuffer msg frame - {}".format(reference_path.header.frame_id))
 
         # Here reference path is appended reversely in order to easy move points in a FIFO way
         with self._reference_path_lock:
@@ -61,7 +64,9 @@ class PathBuffer:
             self._reference_path_changed = True
         rospy.loginfo("Received reference path, length:%d", len(reference_path.poses))
 
-    def update(self, required_reference_path_length = 10, front_vehicle_avoidance_require_thres = 2):
+    def update(self, required_reference_path_length = 10, 
+                front_vehicle_avoidance_require_thres = 2,
+                remained_passed_point = 5):
         """
         Delete the passed point and add more point to the reference path
         """
@@ -83,10 +88,9 @@ class PathBuffer:
         ego_state = tstates.ego_state # for easy access
 
         # Process segment clear request
-        with self._reference_path_lock:
-            if self._reference_path_changed:
-                self._reference_path_segment.clear()
-                self._reference_path_changed = False
+        if self._reference_path_changed:
+            self._reference_path_segment.clear()
+            self._reference_path_changed = False
         # tstates.reference_path = self._reference_path_buffer
         # reference_path = tstates.reference_path # for easy access
 
@@ -97,7 +101,7 @@ class PathBuffer:
                 ego_state.pose.pose.position.y,
                 np.array(self._reference_path_segment)
             )
-            for _ in range(nearest_idx):
+            for _ in range(nearest_idx-remained_passed_point):
                 removed_point = self._reference_path_segment.popleft()
                 rospy.logdebug("removed waypoint: %s, remaining count: %d", str(removed_point), len(self._reference_path_buffer))
 

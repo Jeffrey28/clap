@@ -58,12 +58,11 @@ class MapProvider(object):
 
     def pose_callback(self, msg):
         # Note: Here we actually assume that pose is updating at highest frequency
-        #self._reference_path_trigger.wait()
-        #jxy: this is where the problem lies. Waiting flnally resulted in time delay!
         if self._reference_path_trigger:
             new_static_map = self._map_instance.receive_new_pose(msg.state.pose.pose.position.x, msg.state.pose.pose.position.y)
             if new_static_map is not None:
                 self._local_map_publisher.publish(new_static_map)
+                rospy.logdebug("[%s] Publish new static map" % __module_name__)
 
 if __name__ == "__main__":
     rospy.init_node("map_provider", log_level=rospy.INFO)
