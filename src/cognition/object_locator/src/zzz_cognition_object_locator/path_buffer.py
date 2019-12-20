@@ -64,7 +64,9 @@ class PathBuffer:
             self._reference_path_changed = True
         rospy.loginfo("Received reference path, length:%d", len(reference_path.poses))
 
-    def update(self, required_reference_path_length = 10, front_vehicle_avoidance_require_thres = 2):
+    def update(self, required_reference_path_length = 10, 
+                front_vehicle_avoidance_require_thres = 2,
+                remained_passed_point = 5):
         """
         Delete the passed point and add more point to the reference path
         """
@@ -99,7 +101,7 @@ class PathBuffer:
                 ego_state.pose.pose.position.y,
                 np.array(self._reference_path_segment)
             )
-            for _ in range(nearest_idx):
+            for _ in range(nearest_idx-remained_passed_point):
                 removed_point = self._reference_path_segment.popleft()
                 rospy.logdebug("removed waypoint: %s, remaining count: %d", str(removed_point), len(self._reference_path_buffer))
 
@@ -189,6 +191,8 @@ class PathBuffer:
                 nearest_dis = d
 
         if front_vehicle is not None:
-            rospy.logdebug("reference lane: front vehicle dis: %f", nearest_dis)
+            rospy.loginfo("front vehicle pos {}-{}, ego pos {}-{}, front distance {}".format(
+                vehicle.state.pose.pose.position.x, vehicle.state.pose.pose.position.y,
+                tstates.ego_state.pose.pose.position.x, tstates.ego_state.pose.pose.position.y, nearest_dis))
 
         return front_vehicle
