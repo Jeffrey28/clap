@@ -67,3 +67,8 @@ License
 -------
 
 ScenarioRunner specific code is distributed under MIT License.
+
+
+additional info: 
+-------
+cp carla_PythonAPI_scene_layout.py to carla_root/PythonAPI/carla/scene_layout.py 
