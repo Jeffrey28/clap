@@ -646,10 +646,11 @@ class ChallengeEvaluator(object):
                 # show current score
                 total_score, route_score, infractions_score = self.compute_current_statistics()
                 print("{}/{}".format(route_score, infractions_score))
+                
                 self.world.debug.draw_string(ego_trans.location + carla.Location(z=15),
                                              "[{:.2f}/{:.2f}]".format(route_score, infractions_score),
                                              draw_shadow=False, color=carla.Color(255, 255, 255),
-                                             life_time=0.01)
+                                             life_time=0)
 
             if self.route_visible:
                 turn_positions_and_labels = clean_route(trajectory)
