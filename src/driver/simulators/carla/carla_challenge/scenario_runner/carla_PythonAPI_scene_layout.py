@@ -201,14 +201,16 @@ def get_dynamic_objects(carla_world, carla_map):
         for vehicle in vehicles:
             v_transform = vehicle.get_transform()
             location_gnss = carla_map.transform_to_geolocation(v_transform.location)
-            heading = v_transform.get_forward_vector()
+            v_velocity = vehicle.get_velocity()
+            va_velocity = vehicle.get_angular_velocity()
             v_dict = {
                 "id": vehicle.id,
                 "position": [location_gnss.latitude, location_gnss.longitude, location_gnss.altitude],
-                "orientation": [v_transform.rotation.roll, v_transform.rotation.pitch, v_transform.rotation.yaw],
+                "orientation": v_transform.rotation,
                 "bounding_box": [[v.longitude, v.latitude, v.altitude] for v in _get_bounding_box(vehicle)],
                 "world_position" : [v_transform.location.x, v_transform.location.y, v_transform.location.z],
-                "heading" : [heading.x, heading.y, heading.z]
+                "velocity" : v_velocity,
+                "angular_velocity" : va_velocity
             }
             vehicles_dict[vehicle.id] = v_dict
         return vehicles_dict
@@ -219,7 +221,6 @@ def get_dynamic_objects(carla_world, carla_map):
 
         hero_waypoint = carla_map.get_waypoint(hero_vehicle.get_location())
         hero_transform = hero_vehicle.get_transform()
-        heading = hero_transform.get_forward_vector()
         location_gnss = carla_map.transform_to_geolocation(hero_transform.location)
 
         hero_vehicle_dict = {
@@ -235,14 +236,16 @@ def get_dynamic_objects(carla_world, carla_map):
         for walker in walkers:
             w_transform = walker.get_transform()
             location_gnss = carla_map.transform_to_geolocation(w_transform.location)
-            heading = w_transform.get_forward_vector()
+            w_velocity = walker.get_velocity()
+            wa_velocity = walker.get_angular_velocity()
             w_dict = {
-                "id": walker.id,
-                "position": [location_gnss.latitude, location_gnss.longitude, location_gnss.altitude],
-                "orientation": [w_transform.rotation.roll, w_transform.rotation.pitch, w_transform.rotation.yaw],
-                "bounding_box": [[v.longitude, v.latitude, v.altitude] for v in _get_bounding_box(walker)],
+                "id" : walker.id,
+                "position" : [location_gnss.latitude, location_gnss.longitude, location_gnss.altitude],
+                "orientation" : w_transform.rotation,
+                "bounding_box" : [[v.longitude, v.latitude, v.altitude] for v in _get_bounding_box(walker)],
                 "world_position" : [w_transform.location.x, w_transform.location.y, w_transform.location.z],
-                "heading" : [heading.x, heading.y, heading.z]
+                "velocity" : w_velocity,
+                "angular_velocity" : wa_velocity
             }
             walkers_dict[walker.id] = w_dict
         return walkers_dict

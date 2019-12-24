@@ -23,6 +23,7 @@ import tf
 from cv_bridge import CvBridge
 
 from srunner.challenge.autoagents.autonomous_agent import AutonomousAgent, Track
+from srunner.challenge.autoagents.transforms import carla_velocity_to_ros_twist, carla_rotation_to_ros_quaternion
 from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import PoseStamped
 from rosgraph_msgs.msg import Clock
@@ -473,29 +474,17 @@ class RosAgent(AutonomousAgent):
 
         # Get vehicle direction
         rotation = target_vehicle.get('orientation')
-        roll, pitch, yaw = rotation
-        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+        quaternion = tf.transformations.quaternion_from_euler(rotation.roll, rotation.pitch, rotation.yaw)
 
         # Get vehicle speed from last time vehicle list
         matched_vehicle_state = None
         if target_vehicle_id in self.objects_storage:
             matched_vehicle_state = self.objects_storage[target_vehicle_id]
 
-        if matched_vehicle_state is None:
-            speed_x = speed_y = 0
-            speed = 0
-        else:
-            speed_x = (t_loc[0] - matched_vehicle_state[0]) / 0.05
-            speed_y = (t_loc[1] - matched_vehicle_state[1]) / 0.05
-            speed = math.sqrt(speed_x*speed_x + speed_y*speed_y)
-            if speed > 1 and speed > max(matched_vehicle_state[2] * 1.5, matched_vehicle_state[2] + 6 * 0.05):
-                speed = speed / 2
-            if speed < min(matched_vehicle_state[2] * 0.5, matched_vehicle_state[2] - 6 * 0.05):
-                speed = matched_vehicle_state[2]
-
         # get transform 
         world_position = target_vehicle.get('world_position')
         velocity = target_vehicle.get('velocity')
+        avelocity = target_vehicle.get('angular_velocity')
 
         # wrap vehicle info
         vehicle_target = TrackingBox()
@@ -505,34 +494,18 @@ class RosAgent(AutonomousAgent):
         vehicle_target.bbox.pose.pose.position.x = world_position[0]
         vehicle_target.bbox.pose.pose.position.y = -world_position[1]
         vehicle_target.bbox.pose.pose.position.z = world_position[2]
-        vehicle_target.bbox.pose.pose.orientation.x = quaternion[0]
-        vehicle_target.bbox.pose.pose.orientation.y = quaternion[1]
-        vehicle_target.bbox.pose.pose.orientation.z = quaternion[2]
-        vehicle_target.bbox.pose.pose.orientation.w = quaternion[3]
+        
+        vehicle_target.bbox.pose.pose.orientation = carla_rotation_to_ros_quaternion(rotation)
         
         vehicle_target.bbox.dimension.length_x = 1
         vehicle_target.bbox.dimension.length_y = 1
         vehicle_target.bbox.dimension.length_z = 1
 
-        vehicle_target.twist.twist.linear.x = velocity[0]
-        vehicle_target.twist.twist.linear.y = -velocity[1]
-        vehicle_target.twist.twist.linear.z = velocity[2]
-        
-        # vehicle_target.bbox.pose.pose.position.x = t_loc[0]
-        # vehicle_target.bbox.pose.pose.position.y = t_loc[1]
-        # vehicle_target.bbox.pose.pose.position.z = 0
-        # vehicle_target.bbox.pose.pose.orientation.x = quaternion[0]
-        # vehicle_target.bbox.pose.pose.orientation.y = quaternion[1]
-        # vehicle_target.bbox.pose.pose.orientation.z = quaternion[2]
-        # vehicle_target.bbox.pose.pose.orientation.w = quaternion[3]
-        # vehicle_target.bbox.dimension.length_x = 1
-        # vehicle_target.bbox.dimension.length_y = 1
-        # vehicle_target.bbox.dimension.length_z = 1
-        # vehicle_target.twist.twist.linear.x = speed_x
-        # vehicle_target.twist.twist.linear.y = speed_y
-        # vehicle_target.twist.twist.linear.z = 0
-        
-        self.objects_storage[target_vehicle_id] = (t_loc[0], t_loc[1], speed)
+        # carla_velocity_to_ros_twist(carla_linear_velocity, carla_angular_velocity, carla_rotation):
+        vehicle_target.twist.twist = carla_velocity_to_ros_twist(velocity, avelocity, rotation)
+
+        speed = math.sqrt(velocity.x**2 + velocity.y**2 + velocity.z**2)
+        self.objects_storage[target_vehicle_id] = (world_position[0], -world_position[1], speed)
         return vehicle_target
 
     def publish_objects(self, sensor_id, data):
@@ -586,13 +559,12 @@ class RosAgent(AutonomousAgent):
         Execute one step of navigation.
         """
         self.vehicle_control_event.clear()
-        # rospy.loginfo("*** origin {},{} ***".format(self.lon_origin, self.lat_origin))
         self.timestamp = timestamp
         self.clock_publisher.publish(Clock(rospy.Time.from_sec(timestamp)))
 
         # check if stack is still running
         if self.stack_process and self.stack_process.poll() is not None:
-            raise RuntimeError("Stack exited with: {} {}".format(self.stack_process.returncode, self.stack_process.communicate()[0]))
+            raise RuntimeError("!!!Stack exited with: {} {}".format(self.stack_process.returncode, self.stack_process.communicate()[0]))
 
         # publish global plan to ROS once
         if self._global_plan_world_coord and not self.global_plan_published:

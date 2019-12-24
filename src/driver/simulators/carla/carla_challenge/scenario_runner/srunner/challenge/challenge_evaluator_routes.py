@@ -1236,11 +1236,6 @@ class ChallengeEvaluator(object):
 
         for route_idx, route_description in enumerate(route_descriptions_list):
             
-            # if route_description['town_name'] == 'Town04':
-            #     pass
-            # else:
-            #     continue
-
             for repetition in range(self.repetitions):
                 # check if we have enough wall time to run this specific route
                 if not self.within_available_time():
@@ -1281,11 +1276,12 @@ class ChallengeEvaluator(object):
                 # If something goes wrong, still take the current score, and continue
                 try:
                     self._current_route_broke = False
+                    rospy.loginfo("+++ load_environment_and_run +++")
                     self.load_environment_and_run(args, world_annotations, route_description)
                 except Exception as e:
-                    if self.debug > 0:
-                        traceback.print_exc()
-                        raise
+                    rospy.loginfo('!!! exception happens !!!')
+                    traceback.print_exc()
+
                     if self._system_error or not self.agent_instance:
                         print(e)
                         sys.exit(-1)
@@ -1299,6 +1295,7 @@ class ChallengeEvaluator(object):
                 client.stop_recorder()
 
                 # clean up
+                rospy.loginfo("!!! CLEAN-UP !!!")
                 settings = self.world.get_settings()
                 settings.synchronous_mode = False
                 self.world.apply_settings(settings)
@@ -1331,7 +1328,7 @@ def force_quit_handler(signum, frame):
     print('****************************\n Scenario Runner Abort Running...\n******************************\n')
     global stack_process_pid
     os.killpg(stack_process_pid, signal.SIGTERM)
-    time.sleep(2)
+    time.sleep(1)
     sys.exit(-1)
 
 
