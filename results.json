@@ -1,0 +1,25 @@
+{
+    "submission_status": "FINISHED", 
+    "result": [
+        {
+            "accuracies": {
+                "infraction points": 0.0, 
+                "avg. route points": 0.0, 
+                "total avg.": 0.0
+            }, 
+            "show_to_participant": true, 
+            "split": "dev_split"
+        }
+    ], 
+    "stderr": "", 
+    "metadata": [
+        {
+            "accuracies": {
+                "infraction points": 0.0, 
+                "avg. route points": 0.0, 
+                "total avg.": 0.0
+            }, 
+            "stderr": ""
+        }
+    ]
+}

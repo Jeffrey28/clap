@@ -23,7 +23,7 @@ import tf
 from cv_bridge import CvBridge
 
 from srunner.challenge.autoagents.autonomous_agent import AutonomousAgent, Track
-from srunner.challenge.autoagents.transforms import carla_velocity_to_ros_twist, carla_rotation_to_ros_quaternion
+from transforms import carla_velocity_to_ros_twist, carla_rotation_to_ros_quaternion
 from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import PoseStamped
 from rosgraph_msgs.msg import Clock
@@ -285,16 +285,16 @@ class RosAgent(AutonomousAgent):
              'id': 'LIDAR'}
         """
         sensors = [
-            {'type':'sensor.camera.rgb', 'x': 0, 'y': 0, 'z': 2, 'roll': 0.0, 'pitch': 4, 'yaw': 0.0, #pitch 3 for traffic light
-                'width': 400, 'height': 300, 'fov': 10, 'id': 'Telephoto'},
-            {'type':'sensor.camera.rgb', 'x': 0, 'y': 0, 'z': 2, 'roll': 0.0, 'pitch': -1, 'yaw': 0.0, #pitch 3 for traffic light
-                'width': 600, 'height': 400, 'fov': 60, 'id': 'Wideangle'},
+            # {'type':'sensor.camera.rgb', 'x': 0, 'y': 0, 'z': 2, 'roll': 0.0, 'pitch': 4, 'yaw': 0.0, #pitch 3 for traffic light
+            #     'width': 400, 'height': 300, 'fov': 10, 'id': 'Telephoto'},
+            # {'type':'sensor.camera.rgb', 'x': 0, 'y': 0, 'z': 2, 'roll': 0.0, 'pitch': -1, 'yaw': 0.0, #pitch 3 for traffic light
+            #     'width': 600, 'height': 400, 'fov': 60, 'id': 'Wideangle'},
             {'type': 'sensor.other.gnss', 'x': 0.0, 'y': -0.0, 'z': 1.60, 'id': 'GPS'},
             # {'type': 'sensor.other.gnss', 'x': 1.0, 'y': -0.0, 'z': 1.60, 'id': 'GPS1'},
             {'type': 'sensor.object_finder', 'reading_frequency': 20, 'id': 'object_finder'},
             {'type': 'sensor.can_bus', 'reading_frequency': 25, 'id': 'can_bus'},
             {'type': 'sensor.hd_map', 'reading_frequency': 20, 'id': 'hdmap'},
-            {'type': 'sensor.lidar.ray_cast', 'x': 0.0, 'y': 0.0, 'z': 2.5, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'LIDAR'}
+            # {'type': 'sensor.lidar.ray_cast', 'x': 0.0, 'y': 0.0, 'z': 2.5, 'yaw': 0.0, 'pitch': 0.0, 'roll': 0.0, 'id': 'LIDAR'}
             # {'type': 'sensor.scene_layout', 'id': 'scene_layout'}
             # 
         ]

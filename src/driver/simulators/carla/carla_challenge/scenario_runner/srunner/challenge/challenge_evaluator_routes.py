@@ -254,6 +254,9 @@ class ChallengeEvaluator(object):
         # debugging parameters
         self.route_visible = self.debug > 0
 
+        # Select Map (zhcao):
+        self._selected_map = "Town04" # None
+
     def within_available_time(self):
         current_time = datetime.datetime.now()
         elapsed_seconds = (current_time - self.start_wall_time).seconds
@@ -1236,7 +1239,10 @@ class ChallengeEvaluator(object):
         print('World Initial Setttings {}'.format(settings))
 
         for route_idx, route_description in enumerate(route_descriptions_list):
-            
+
+            if not ((self._selected_map is None) or (route_description['town_name'] == self._selected_map)):
+                continue
+                
             for repetition in range(self.repetitions):
                 # check if we have enough wall time to run this specific route
                 if not self.within_available_time():
@@ -1248,7 +1254,6 @@ class ChallengeEvaluator(object):
 
                 # For debugging
                 self.route_visible = self.debug > 0
-
                 # Try to load the world and start recording
                 # If not successful stop recording and continue with next iteration
                 try:
