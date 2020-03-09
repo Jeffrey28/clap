@@ -101,6 +101,7 @@ class DrivingSpaceConstructor:
         tstates.ego_lane_index = -1 #about to modify in the following steps
         tstates.ego_s = -1
         tstates.drivable_area = []
+        tstates.next_drivable_area = []
 
         # Update driving_space with tstate
         if static_map.in_junction or len(static_map.lanes) == 0:
@@ -115,6 +116,7 @@ class DrivingSpaceConstructor:
             self.locate_stop_sign_in_lanes(tstates)
             self.locate_speed_limit_in_lanes(tstates)
             self.calculate_drivable_area(tstates)
+            self.calculate_next_drivable_area(tstates)
         
         self._driving_space = DrivingSpace()
 
@@ -445,7 +447,36 @@ class DrivingSpaceConstructor:
             self._drivable_area_markerarray.markers.append(tempmarker)
             count = count + 1
 
-        #7. traffic lights
+        #7. next drivable area
+        self._next_drivable_area_markerarray = MarkerArray()
+
+        count = 0
+        if len(tstates.next_drivable_area) != 0:
+            
+            tempmarker = Marker() #jxy: must be put inside since it is python
+            tempmarker.header.frame_id = "map"
+            tempmarker.header.stamp = rospy.Time.now()
+            tempmarker.ns = "zzz/cognition"
+            tempmarker.id = count
+            tempmarker.type = Marker.LINE_STRIP
+            tempmarker.action = Marker.ADD
+            tempmarker.scale.x = 0.20
+            tempmarker.color.r = 1.0
+            tempmarker.color.g = 1.0
+            tempmarker.color.b = 0.0
+            tempmarker.color.a = 0.5
+            tempmarker.lifetime = rospy.Duration(0.5)
+
+            for point in tstates.next_drivable_area:
+                p = Point()
+                p.x = point[0]
+                p.y = point[1]
+                p.z = 0 #TODO: the map does not provide z value
+                tempmarker.points.append(p)
+            self._next_drivable_area_markerarray.markers.append(tempmarker)
+            count = count + 1
+
+        #8. traffic lights
         self._traffic_lights_markerarray = MarkerArray()
 
         #TODO: now no lights are in. I'll check it when I run the codes.
@@ -603,6 +634,20 @@ class DrivingSpaceConstructor:
             tstates.ego_s = ego_s
             #TODO: this is not modified!
         rospy.logdebug("Distance to end: (lane %f) %f", ego_lane_index, self._ego_vehicle_distance_to_lane_tail[ego_lane_index_rounded])
+
+    def calculate_next_drivable_area(self, tstates):
+        '''
+        The drivable area in the next unit of road (i.e. junction or road section)
+        '''
+        #TODO: now only support junction, static
+        tstates.next_drivable_area = []
+        if len(tstates.static_map.next_drivable_area.points) != 0:
+            for i in range(len(tstates.static_map.next_drivable_area.points)):
+                node_point = tstates.static_map.next_drivable_area.points[i]
+                tstates.next_drivable_area.append([node_point.x, node_point.y])
+        #close the figure
+        if len(tstates.static_map.next_drivable_area.points) != 0:
+            tstates.next_drivable_area.append(tstates.next_drivable_area[0])
 
     def calculate_drivable_area(self, tstates):
         '''
