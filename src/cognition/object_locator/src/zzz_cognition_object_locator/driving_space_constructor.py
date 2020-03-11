@@ -117,6 +117,18 @@ class DrivingSpaceConstructor:
             self.locate_speed_limit_in_lanes(tstates)
             self.calculate_drivable_area(tstates)
             self.calculate_next_drivable_area(tstates)
+
+        # Check why there are time when there are neither junction area nor lanes
+        '''
+        if static_map.in_junction or len(static_map.lanes) == 0:
+            rospy.loginfo("-------------------Circumstance 1: junction")
+            rospy.loginfo("-------------------drivable area point num: %d", len(tstates.drivable_area))
+        else:
+            rospy.loginfo("-------------------Circumstance 2: road")
+            rospy.loginfo("-------------------lane num: %d", len(static_map.lanes))
+
+        rospy.loginfo("\n\n\n")
+        '''
         
         self._driving_space = DrivingSpace()
 
@@ -216,7 +228,7 @@ class DrivingSpaceConstructor:
                     #each lane has the right boundary, only the lane with the biggest id has the left boundary
                     tempmarker.type = Marker.LINE_STRIP
                     tempmarker.action = Marker.ADD
-                    tempmarker.scale.x = 0.15
+                    tempmarker.scale.x = 0.3
                     if lane.left_boundaries[0].boundary_type == 1: #broken lane is set gray
                         tempmarker.color.r = 0.6
                         tempmarker.color.g = 0.6
@@ -433,8 +445,8 @@ class DrivingSpaceConstructor:
             tempmarker.action = Marker.ADD
             tempmarker.scale.x = 0.20
             tempmarker.color.r = 1.0
-            tempmarker.color.g = 0.0
-            tempmarker.color.b = 1.0
+            tempmarker.color.g = 1.0
+            tempmarker.color.b = 0.0
             tempmarker.color.a = 0.5
             tempmarker.lifetime = rospy.Duration(0.5)
 
@@ -461,11 +473,11 @@ class DrivingSpaceConstructor:
             tempmarker.type = Marker.LINE_STRIP
             tempmarker.action = Marker.ADD
             tempmarker.scale.x = 0.20
-            tempmarker.color.r = 1.0
-            tempmarker.color.g = 1.0
+            tempmarker.color.r = 0.5
+            tempmarker.color.g = 0.5
             tempmarker.color.b = 0.0
             tempmarker.color.a = 0.5
-            tempmarker.lifetime = rospy.Duration(0.5)
+            tempmarker.lifetime = rospy.Duration(0.1)
 
             for point in tstates.next_drivable_area:
                 p = Point()
@@ -476,7 +488,112 @@ class DrivingSpaceConstructor:
             self._next_drivable_area_markerarray.markers.append(tempmarker)
             count = count + 1
 
-        #8. traffic lights
+        #8. next lanes
+        self._next_lanes_markerarray = MarkerArray()
+
+        count = 0
+        if len(tstates.static_map.next_lanes) != 0:
+            biggest_id = 0 #TODO: better way to find the smallest id
+            
+            for lane in tstates.static_map.next_lanes:
+                if lane.index > biggest_id:
+                    biggest_id = lane.index
+                tempmarker = Marker() #jxy: must be put inside since it is python
+                tempmarker.header.frame_id = "map"
+                tempmarker.header.stamp = rospy.Time.now()
+                tempmarker.ns = "zzz/cognition"
+                tempmarker.id = count
+                tempmarker.type = Marker.LINE_STRIP
+                tempmarker.action = Marker.ADD
+                tempmarker.scale.x = 0.12
+                tempmarker.color.r = 0.7
+                tempmarker.color.g = 0.0
+                tempmarker.color.b = 0.0
+                tempmarker.color.a = 0.5
+                tempmarker.lifetime = rospy.Duration(0.5)
+
+                for lanepoint in lane.central_path_points:
+                    p = Point()
+                    p.x = lanepoint.position.x
+                    p.y = lanepoint.position.y
+                    p.z = lanepoint.position.z
+                    tempmarker.points.append(p)
+                self._next_lanes_markerarray.markers.append(tempmarker)
+                count = count + 1
+
+        #9. next lane boundary line
+        self._next_lanes_boundary_markerarray = MarkerArray()
+
+        count = 0
+        if len(tstates.static_map.next_lanes) != 0:
+            
+            for lane in tstates.static_map.next_lanes:
+                tempmarker = Marker() #jxy: must be put inside since it is python
+                tempmarker.header.frame_id = "map"
+                tempmarker.header.stamp = rospy.Time.now()
+                tempmarker.ns = "zzz/cognition"
+                tempmarker.id = count
+
+                #each lane has the right boundary, only the lane with the smallest id has the left boundary
+                tempmarker.type = Marker.LINE_STRIP
+                tempmarker.action = Marker.ADD
+                tempmarker.scale.x = 0.15
+                
+                if lane.right_boundaries[0].boundary_type == 1: #broken lane is set gray
+                    tempmarker.color.r = 0.4
+                    tempmarker.color.g = 0.4
+                    tempmarker.color.b = 0.4
+                    tempmarker.color.a = 0.5
+                else:
+                    tempmarker.color.r = 0.7
+                    tempmarker.color.g = 0.7
+                    tempmarker.color.b = 0.7
+                    tempmarker.color.a = 0.5
+                tempmarker.lifetime = rospy.Duration(0.5)
+
+                for lb in lane.right_boundaries:
+                    p = Point()
+                    p.x = lb.boundary_point.position.x
+                    p.y = lb.boundary_point.position.y
+                    p.z = lb.boundary_point.position.z
+                    tempmarker.points.append(p)
+                self._next_lanes_boundary_markerarray.markers.append(tempmarker)
+                count = count + 1
+
+                #biggest id: draw left lane
+                if lane.index == biggest_id:
+                    tempmarker = Marker() #jxy: must be put inside since it is python
+                    tempmarker.header.frame_id = "map"
+                    tempmarker.header.stamp = rospy.Time.now()
+                    tempmarker.ns = "zzz/cognition"
+                    tempmarker.id = count
+
+                    #each lane has the right boundary, only the lane with the biggest id has the left boundary
+                    tempmarker.type = Marker.LINE_STRIP
+                    tempmarker.action = Marker.ADD
+                    tempmarker.scale.x = 0.3
+                    if lane.left_boundaries[0].boundary_type == 1: #broken lane is set gray
+                        tempmarker.color.r = 0.4
+                        tempmarker.color.g = 0.4
+                        tempmarker.color.b = 0.4
+                        tempmarker.color.a = 0.5
+                    else:
+                        tempmarker.color.r = 0.7
+                        tempmarker.color.g = 0.7
+                        tempmarker.color.b = 0.7
+                        tempmarker.color.a = 0.5
+                    tempmarker.lifetime = rospy.Duration(0.5)
+
+                    for lb in lane.left_boundaries:
+                        p = Point()
+                        p.x = lb.boundary_point.position.x
+                        p.y = lb.boundary_point.position.y
+                        p.z = lb.boundary_point.position.z
+                        tempmarker.points.append(p)
+                    self._next_lanes_boundary_markerarray.markers.append(tempmarker)
+                    count = count + 1
+
+        #10. traffic lights
         self._traffic_lights_markerarray = MarkerArray()
 
         #TODO: now no lights are in. I'll check it when I run the codes.
@@ -749,7 +866,8 @@ class DrivingSpaceConstructor:
                             middle_corner_id = smallest_dist_id
 
                         for j in range(len(angle_list)):
-                            if angle_list[j] < corner_list_angle[big_corner_id] and angle_list[j] > corner_list_angle[small_corner_id]:
+                            if (angle_list[j] < corner_list_angle[big_corner_id] and angle_list[j] > corner_list_angle[small_corner_id]) \
+                                or (angle_list[j] + 2 * 3.1415927 < corner_list_angle[big_corner_id] and angle_list[j] + 2 * 3.1415927 > corner_list_angle[small_corner_id]):
                                 corner1 = -1
                                 corner2 = -1
                                 if middle_corner_id == -1:
