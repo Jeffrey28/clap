@@ -850,11 +850,11 @@ class DrivingSpaceConstructor:
                         small_corner_id = np.argmin(corner_list_angle)
                         big_corner_id = np.argmax(corner_list_angle)
 
-                        if corner_list_angle[big_corner_id] - corner_list_angle[small_corner_id] > 5:
+                        if corner_list_angle[big_corner_id] - corner_list_angle[small_corner_id] > math.pi:
                             #cross pi
                             for j in range(4):
                                 if corner_list_angle[j] < 0:
-                                    corner_list_angle[j] += 2 * 3.1415927
+                                    corner_list_angle[j] += 2 * math.pi
 
                         small_corner_id = np.argmin(corner_list_angle)
                         big_corner_id = np.argmax(corner_list_angle)
@@ -866,8 +866,7 @@ class DrivingSpaceConstructor:
                             middle_corner_id = smallest_dist_id
 
                         for j in range(len(angle_list)):
-                            if (angle_list[j] < corner_list_angle[big_corner_id] and angle_list[j] > corner_list_angle[small_corner_id]) \
-                                or (angle_list[j] + 2 * 3.1415927 < corner_list_angle[big_corner_id] and angle_list[j] + 2 * 3.1415927 > corner_list_angle[small_corner_id]):
+                            if (angle_list[j] < corner_list_angle[big_corner_id] and angle_list[j] > corner_list_angle[small_corner_id]):
                                 corner1 = -1
                                 corner2 = -1
                                 if middle_corner_id == -1:
@@ -883,6 +882,30 @@ class DrivingSpaceConstructor:
 
                                 cross_position_x = corner_list_x[corner2] + (corner_list_x[corner1] - corner_list_x[corner2]) * (angle_list[j] - corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
                                 cross_position_y = corner_list_y[corner2] + (corner_list_y[corner1] - corner_list_y[corner2]) * (angle_list[j] - corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
+                                obstacle_dist = math.sqrt(pow((cross_position_x - ego_x), 2) + pow((cross_position_y - ego_y), 2))
+                                #TODO: find a more accurate method
+                                if dist_list[j] > obstacle_dist:
+                                    dist_list[j] = obstacle_dist
+                                    angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
+                                    check_list[j] = 1
+                            elif (angle_list[j] + 2 * math.pi) > corner_list_angle[small_corner_id] and (angle_list[j] + 2 * math.pi) < corner_list_angle[big_corner_id]:
+                                # cross pi
+                                angle_list_plus = angle_list[j] + 2 * math.pi
+                                corner1 = -1
+                                corner2 = -1
+                                if middle_corner_id == -1:
+                                    corner1 = big_corner_id
+                                    corner2 = small_corner_id
+                                else:
+                                    if angle_list_plus < corner_list_angle[middle_corner_id]:
+                                        corner1 = middle_corner_id
+                                        corner2 = small_corner_id
+                                    else:
+                                        corner1 = big_corner_id
+                                        corner2 = middle_corner_id
+
+                                cross_position_x = corner_list_x[corner2] + (corner_list_x[corner1] - corner_list_x[corner2]) * (angle_list_plus - corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
+                                cross_position_y = corner_list_y[corner2] + (corner_list_y[corner1] - corner_list_y[corner2]) * (angle_list_plus- corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
                                 obstacle_dist = math.sqrt(pow((cross_position_x - ego_x), 2) + pow((cross_position_y - ego_y), 2))
                                 #TODO: find a more accurate method
                                 if dist_list[j] > obstacle_dist:
