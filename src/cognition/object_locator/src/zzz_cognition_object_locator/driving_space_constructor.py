@@ -139,9 +139,6 @@ class DrivingSpaceConstructor:
             boundary_point.vy = drivable_area_point[3]
             self.dynamic_boundary.boundary.append(boundary_point)
 
-        print("drivable_area:")
-        print tstates.drivable_area
-
         #visualization
         #1. lanes
         self._lanes_markerarray = MarkerArray()
@@ -462,35 +459,45 @@ class DrivingSpaceConstructor:
             #stress the dynamic parts
             for i in range(len(tstates.drivable_area)):
                 point = tstates.drivable_area[i]
-                p = Point()
-                p.x = point[0]
-                p.y = point[1]
-                p.z = 0 #TODO: the map does not provide z value
-                if point[2] != 0 or point[3] != 0:
-                    tempmarker = Marker() #jxy: must be put inside since it is python
-                    tempmarker.header.frame_id = "map"
-                    tempmarker.header.stamp = rospy.Time.now()
-                    tempmarker.ns = "zzz/cognition"
-                    tempmarker.id = count
-                    tempmarker.type = Marker.SPHERE
-                    tempmarker.action = Marker.ADD
-                    tempmarker.pose.position.x = p.x
-                    tempmarker.pose.position.y = p.y
-                    tempmarker.pose.position.z = 0.0
-                    tempmarker.pose.orientation.x = 0.0
-                    tempmarker.pose.orientation.y = 0.0
-                    tempmarker.pose.orientation.z = 0.0
-                    tempmarker.pose.orientation.w = 1.0
-                    tempmarker.scale.x = 0.20
-                    tempmarker.scale.y = 0.20
-                    tempmarker.scale.z = 0.20
-                    tempmarker.color.r = 0.0
-                    tempmarker.color.g = 0.0
-                    tempmarker.color.b = 1.0
-                    tempmarker.color.a = 1.0
-                    tempmarker.lifetime = rospy.Duration(0.5)
-                    self._drivable_area_markerarray.markers.append(tempmarker)
-                    count = count + 1
+                if abs(point[2]) < 0.1 and abs(point[3]) < 0.1:
+                    continue
+
+                if i != len(tstates.drivable_area) - 1:
+                    next_point = tstates.drivable_area[i+1]
+                else:
+                    # this is actually tstates.drivable_area[0] for closing the figure
+                    continue
+
+                tempmarker = Marker() #jxy: must be put inside since it is python
+                tempmarker.header.frame_id = "map"
+                tempmarker.header.stamp = rospy.Time.now()
+                tempmarker.ns = "zzz/cognition"
+                tempmarker.id = count
+                tempmarker.type = Marker.ARROW
+                tempmarker.action = Marker.ADD
+                tempmarker.scale.x = 0.40
+                tempmarker.scale.y = 0.75
+                tempmarker.scale.z = 0.75
+                tempmarker.color.r = 0.0
+                tempmarker.color.g = 0.0
+                tempmarker.color.b = 1.0
+                tempmarker.color.a = 1.0
+                tempmarker.lifetime = rospy.Duration(0.1)
+
+                #the velocity of i is the section velocity between point i and point i+1
+                startpoint = Point()
+                endpoint = Point()
+                startpoint.x = (point[0] + next_point[0])/2.0
+                startpoint.y = (point[1] + next_point[1])/2.0
+                startpoint.z = 0.0
+                endpoint.x = (point[0] + next_point[0])/2.0 + point[2]
+                endpoint.y = (point[1] + next_point[1])/2.0 + point[3]
+                endpoint.z = 0.0
+                tempmarker.points.append(startpoint)
+                tempmarker.points.append(endpoint)
+
+                self._drivable_area_markerarray.markers.append(tempmarker)
+                count = count + 1
 
         #7. next drivable area
         self._next_drivable_area_markerarray = MarkerArray()
@@ -813,6 +820,7 @@ class DrivingSpaceConstructor:
             dist_list = []
             vx_list = []
             vy_list = []
+            id_list = []
 
             if len(tstates.static_map.drivable_area.points) != 0:
                 for i in range(len(tstates.static_map.drivable_area.points)):
@@ -831,11 +839,13 @@ class DrivingSpaceConstructor:
                             #the velocity of static boundary is 0
                             vx_list.append(0)
                             vy_list.append(0)
+                            id_list.append(-1) #static boundary, interp points (can be deleted)
                     
                     angle_list.append(math.atan2(node_point.y - ego_y, node_point.x - ego_x))
                     dist_list.append(math.sqrt(pow((node_point.x - ego_x), 2) + pow((node_point.y - ego_y), 2)))
                     vx_list.append(0)
                     vy_list.append(0)
+                    id_list.append(-2) #static boundary, nodes (cannot be deleted)
                     
             else:
                 return
@@ -844,11 +854,12 @@ class DrivingSpaceConstructor:
             check_list = np.zeros(len(dist_list))
 
             if len(tstates.surrounding_object_list) != 0:
-                for obs in tstates.surrounding_object_list:
+                for i in range(len(tstates.surrounding_object_list)):
+                    obs = tstates.surrounding_object_list[i]
                     dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
                         + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
                     
-                    if dist_to_ego < 20:
+                    if dist_to_ego < 35:
                         #TODO: find a more robust method
                         obs_x = obs.state.pose.pose.position.x
                         obs_y = obs.state.pose.pose.position.y
@@ -906,6 +917,7 @@ class DrivingSpaceConstructor:
                             if (angle_list[j] < corner_list_angle[big_corner_id] and angle_list[j] > corner_list_angle[small_corner_id]):
                                 corner1 = -1
                                 corner2 = -1
+                                id_extra_flag = 0 # to distinguish edges in a whole object
                                 if middle_corner_id == -1:
                                     corner1 = big_corner_id
                                     corner2 = small_corner_id
@@ -913,9 +925,14 @@ class DrivingSpaceConstructor:
                                     if angle_list[j] < corner_list_angle[middle_corner_id]:
                                         corner1 = middle_corner_id
                                         corner2 = small_corner_id
+                                        id_extra_flag = 0.1
                                     else:
                                         corner1 = big_corner_id
                                         corner2 = middle_corner_id
+                                        id_extra_flag = 0.2
+
+                                #boundary direction
+                                direction = math.atan2(corner_list_y[corner2] - corner_list_y[corner1], corner_list_x[corner2] - corner_list_x[corner1])
 
                                 cross_position_x = corner_list_x[corner2] + (corner_list_x[corner1] - corner_list_x[corner2]) * (angle_list[j] - corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
                                 cross_position_y = corner_list_y[corner2] + (corner_list_y[corner1] - corner_list_y[corner2]) * (angle_list[j] - corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
@@ -924,15 +941,20 @@ class DrivingSpaceConstructor:
                                 if dist_list[j] > obstacle_dist:
                                     dist_list[j] = obstacle_dist
                                     angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
-                                    vx_list[j] = obs.state.twist.twist.linear.x[0]
-                                    vy_list[j] = obs.state.twist.twist.linear.y[0]
-                                    #TODO: projection to the vertical direction. A boundary should not have a tangential direction.
+                                    vx = obs.state.twist.twist.linear.x[0]
+                                    vy = obs.state.twist.twist.linear.y[0]
+                                    #a boundary only has vertical velocity, thus the direction is fixed. Only need to calculate the velocity value.
+                                    v_value = vx * math.cos(direction + math.pi/2) + vy * math.sin(direction + math.pi/2)
+                                    vx_list[j] = v_value * math.cos(direction + math.pi/2)
+                                    vy_list[j] = v_value * math.sin(direction + math.pi/2)
+                                    id_list[j] = i + id_extra_flag #mark that this point is updated by the ith obstacle
                                     check_list[j] = 1
                             elif (angle_list[j] + 2 * math.pi) > corner_list_angle[small_corner_id] and (angle_list[j] + 2 * math.pi) < corner_list_angle[big_corner_id]:
                                 # cross pi
                                 angle_list_plus = angle_list[j] + 2 * math.pi
                                 corner1 = -1
                                 corner2 = -1
+                                id_extra_flag = 0
                                 if middle_corner_id == -1:
                                     corner1 = big_corner_id
                                     corner2 = small_corner_id
@@ -940,9 +962,14 @@ class DrivingSpaceConstructor:
                                     if angle_list_plus < corner_list_angle[middle_corner_id]:
                                         corner1 = middle_corner_id
                                         corner2 = small_corner_id
+                                        id_extra_flag = 0.1
                                     else:
                                         corner1 = big_corner_id
                                         corner2 = middle_corner_id
+                                        id_extra_flag = 0.2
+
+                                #boundary direction
+                                direction = math.atan2(corner_list_y[corner2] - corner_list_y[corner1], corner_list_x[corner2] - corner_list_x[corner1])
 
                                 cross_position_x = corner_list_x[corner2] + (corner_list_x[corner1] - corner_list_x[corner2]) * (angle_list_plus - corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
                                 cross_position_y = corner_list_y[corner2] + (corner_list_y[corner1] - corner_list_y[corner2]) * (angle_list_plus- corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
@@ -951,9 +978,37 @@ class DrivingSpaceConstructor:
                                 if dist_list[j] > obstacle_dist:
                                     dist_list[j] = obstacle_dist
                                     angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
-                                    check_list[j] = 1
-                                    vx_list[j] = obs.state.twist.twist.linear.x[0]
-                                    vy_list[j] = obs.state.twist.twist.linear.y[0]
+                                    vx = obs.state.twist.twist.linear.x[0]
+                                    vy = obs.state.twist.twist.linear.y[0]
+                                    #a boundary only has vertical velocity, thus the direction is fixed. Only need to calculate the velocity value.
+                                    v_value = vx * math.cos(direction + math.pi/2) + vy * math.sin(direction + math.pi/2)
+                                    vx_list[j] = v_value * math.cos(direction + math.pi/2)
+                                    vy_list[j] = v_value * math.sin(direction + math.pi/2)
+                                    id_list[j] = i + id_extra_flag
+
+            # merge the points of the same object to compress the data
+            rospy.loginfo("drivable area point num before deleting: %d", len(angle_list))
+            length_ori = len(angle_list)
+            for i in range(length_ori):
+                j = length_ori - 1 - i
+                next_id = j + 1
+                if id_list[j] == -2:
+                    # key points, should not delete
+                    continue
+                if j == len(angle_list)-1:
+                    next_id = 0
+                if j < 0:
+                    break
+                if id_list[j] == id_list[j-1] and id_list[j] == id_list[next_id]:
+                    del angle_list[j]
+                    del dist_list[j]
+                    del vx_list[j]
+                    del vy_list[j]
+                if id_list[j] >= 0 and id_list[next_id] != id_list[j]:
+                    # velocity of point i means the velocity of the edge between point i and point i+1
+                    vx_list[j] = 0
+                    vy_list[j] = 0
+            rospy.loginfo("drivable area point num after deleting: %d", len(angle_list))
 
             for j in range(len(angle_list)):
                 x = ego_x + dist_list[j] * math.cos(angle_list[j])
@@ -1032,6 +1087,10 @@ class DrivingSpaceConstructor:
             tstates.drivable_area.append(tstates.drivable_area[0])
 
     def lane_section_points_generation(self, starts, ends, startvx, startvy, endvx, endvy, lane_boundaries, tstates):
+
+        #set the velocity of the start point to 0, since the velocity of point i refers to the velocity of the edge between i and i+1
+        startvx = 0
+        startvy = 0
         if starts <= ends:
             smalls = starts
             bigs = ends
@@ -1056,9 +1115,17 @@ class DrivingSpaceConstructor:
                     #if s < start point s, it cannot be the last point, so +1 is ok
                     point1 = lane_boundaries[j].boundary_point
                     point2 = lane_boundaries[j+1].boundary_point
+
+                    #projection to the longitudinal direction
+                    direction = math.atan2(point2.position.y - point1.position.y, point2.position.x - point1.position.x)
+
+                    v_value = smallvx * math.cos(direction) + smallvy * math.sin(direction)
+                    vx_s = v_value * math.cos(direction)
+                    vy_s = v_value * math.sin(direction)
+
                     pointx = point1.position.x + (point2.position.x - point1.position.x) * (smalls - point1.s) / (point2.s - point1.s)
                     pointy = point1.position.y + (point2.position.y - point1.position.y) * (smalls - point1.s) / (point2.s - point1.s)
-                    point = [pointx, pointy, smallvx, smallvy]
+                    point = [pointx, pointy, vx_s, vy_s]
                     pointlist.append(point)
             elif lane_boundaries[j].boundary_point.s > smalls and lane_boundaries[j].boundary_point.s < bigs:
                 point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0]
@@ -1069,13 +1136,22 @@ class DrivingSpaceConstructor:
                 if lane_boundaries[j-1].boundary_point.s < bigs:
                     point1 = lane_boundaries[j-1].boundary_point
                     point2 = lane_boundaries[j].boundary_point
+
+                    #projection to the longitudinal direction
+                    direction = math.atan2(point2.position.y - point1.position.y, point2.position.x - point1.position.x)
+
+                    v_value = bigvx * math.cos(direction) + bigvy * math.sin(direction)
+                    vx_s = v_value * math.cos(direction)
+                    vy_s = v_value * math.sin(direction)
+
                     pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
                     pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
-                    point = [pointx, pointy, bigvx, bigvy]
+                    point = [pointx, pointy, vx_s, vy_s]
                     pointlist.append(point)
 
         if starts <= ends:
-            for point in pointlist:
+            for i in range(len(pointlist)):
+                point = pointlist[i]
                 tstates.drivable_area.append(point)
         else:
             # in reverse order
