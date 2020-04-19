@@ -104,7 +104,6 @@ class LocalMap(object):
                                         for waypoint in reversed(reference_path.poses)]
         self._reference_path.reverse()
 
-        rospy.loginfo("reference path length: %d\n\n\n\n", len(self._reference_path))
         # todo this loop needs to be optimised later
 
         '''
@@ -238,7 +237,6 @@ class LocalMap(object):
 
         map_x, map_y = self.convert_to_map_XY(self._ego_vehicle_x, self._ego_vehicle_y)
         rospy.loginfo("Enter junction, see the next road section")
-        rospy.loginfo("refence path length: %d\n\n\n", len(self._reference_path))
         if len(self._reference_path) > 1:
             _, nearest_idx, _ = dist_from_point_to_polyline2d(
                 map_x, map_y, np.array(self._reference_path)
@@ -246,7 +244,6 @@ class LocalMap(object):
             last_edge = None
             for i in range(nearest_idx, len(self._reference_path), step_length):
                 point = self._reference_path[i]
-                rospy.loginfo("point x: %f, y: %f\n", point[0], point[1])
                 lanes = self._hdmap.getNeighboringLanes(point[0], point[1], self._lane_search_radius, includeJunctions=False)
                 if len(lanes) > 0:
                     _, closestLane = min((dist, lane) for lane, dist in lanes)
@@ -255,7 +252,6 @@ class LocalMap(object):
                         # the nearest point is in the edge, so the vehicle is still in the last edge
                         last_edge = current_edge.getID
                     elif last_edge is None or last_edge != current_edge.getID:
-                        rospy.loginfo("next edge id: %s", current_edge.getID())
 
                         lanes_in_edge = current_edge.getLanes()
                         for lane in lanes_in_edge:
@@ -386,7 +382,6 @@ class LocalMap(object):
             if (flag_straight == 0 and count % 3 == 1) or count % 10 == 1 or count == len(lane.getShape()):
                 # too slow... cost about 7s, so divide by 10, but distance becomes 10 times (5m). If direction changes, reduce the gap.
                 # we start to know the direction at point 2. TODO: actually the direction at point 1 can be gained by considering the next point.
-                rospy.loginfo("location x:%f y:%f", x, y)
 
                 location = carla.Location()
                 location.x = x

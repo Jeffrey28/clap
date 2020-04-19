@@ -987,7 +987,6 @@ class DrivingSpaceConstructor:
                                     id_list[j] = i + id_extra_flag
 
             # merge the points of the same object to compress the data
-            rospy.loginfo("drivable area point num before deleting: %d", len(angle_list))
             length_ori = len(angle_list)
             for i in range(length_ori):
                 j = length_ori - 1 - i
@@ -1008,7 +1007,6 @@ class DrivingSpaceConstructor:
                     # velocity of point i means the velocity of the edge between point i and point i+1
                     vx_list[j] = 0
                     vy_list[j] = 0
-            rospy.loginfo("drivable area point num after deleting: %d", len(angle_list))
 
             for j in range(len(angle_list)):
                 x = ego_x + dist_list[j] * math.cos(angle_list[j])
