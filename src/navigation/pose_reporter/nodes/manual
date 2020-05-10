@@ -104,7 +104,7 @@ class Node(object):
         state.state.twist.twist.linear.y = vel_world[1]
         state.state.twist.twist.linear.z = vel_world[2]
 
-        rospy.logdebug("Position: %.3f, %.3f", state.state.pose.pose.position.x, state.state.pose.pose.position.y)
+        #rospy.logdebug("Position: %.3f, %.3f", state.state.pose.pose.position.x, state.state.pose.pose.position.y)
         
         self._pose_publisher.publish(state)
 

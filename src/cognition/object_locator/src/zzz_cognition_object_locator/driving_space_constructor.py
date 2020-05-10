@@ -141,19 +141,24 @@ class DrivingSpaceConstructor:
             self.dynamic_boundary.boundary.append(boundary_point)
 
         #jxy0510: extend the dynamic boundary by lanes
-        for lane in tstates.static_map.lanes:
-            if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
-                #the left most lane boundary line cannot be broken, or else it won't be the left most lane
-                if lane.right_boundaries[0].boundary_type == 1:
-                    for lb in lane.right_boundaries:
-                        lane_point = DynamicBoundaryPoint()
-                        lane_point.x = lb.boundary_point.position.x
-                        lane_point.y = lb.boundary_point.position.y
-                        lane_point.vx = 0
-                        lane_point.vy = 0
-                        lane_point.omega = 0
-                        lane_point.flag = 3
-                        self.dynamic_boundary.boundary.append(lane_point)
+        '''
+        if not (tstates.static_map.in_junction):
+            for lane in tstates.static_map.lanes:
+                if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
+                    #the left most lane boundary line cannot be broken, or else it won't be the left most lane
+                    if lane.right_boundaries[0].boundary_type == 1:
+                        for lb in lane.right_boundaries:
+                            lane_point = DynamicBoundaryPoint()
+                            lane_point.x = lb.boundary_point.position.x
+                            lane_point.y = lb.boundary_point.position.y
+                            lane_point.vx = 0
+                            lane_point.vy = 0
+                            lane_point.omega = 0
+                            lane_point.flag = 3
+                            self.dynamic_boundary.boundary.append(lane_point
+                            '''
+        
+        rospy.loginfo("---------------------dynamic boundary updated!")
 
         #visualization
         #1. lanes
@@ -327,14 +332,31 @@ class DrivingSpaceConstructor:
                     tempmarker.color.a = 0.5
                     tempmarker.lifetime = rospy.Duration(0.5)
 
+                    #quaternion transform for ego velocity
+
+                    x = obs.state.pose.pose.orientation.x
+                    y = obs.state.pose.pose.orientation.y
+                    z = obs.state.pose.pose.orientation.z
+                    w = obs.state.pose.pose.orientation.w
+
+                    rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
+                    rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
+
+                    vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
+                    vel_world = np.matmul(rotation_mat, vel_obs)
+                    #check if it should be reversed
+                    obs_vx_world = vel_world[0]
+                    obs_vy_world = vel_world[1]
+                    obs_vz_world = vel_world[2]
+
                     startpoint = Point()
                     endpoint = Point()
                     startpoint.x = obs.state.pose.pose.position.x
                     startpoint.y = obs.state.pose.pose.position.y
                     startpoint.z = obs.state.pose.pose.position.z
-                    endpoint.x = obs.state.pose.pose.position.x + obs.state.twist.twist.linear.x
-                    endpoint.y = obs.state.pose.pose.position.y + obs.state.twist.twist.linear.y
-                    endpoint.z = obs.state.pose.pose.position.z + obs.state.twist.twist.linear.z
+                    endpoint.x = obs.state.pose.pose.position.x + obs_vx_world
+                    endpoint.y = obs.state.pose.pose.position.y + obs_vy_world
+                    endpoint.z = obs.state.pose.pose.position.z + obs_vz_world
                     tempmarker.points.append(startpoint)
                     tempmarker.points.append(endpoint)
 
@@ -447,6 +469,8 @@ class DrivingSpaceConstructor:
         self._ego_markerarray.markers.append(tempmarker)
 
         #6. drivable area
+        rospy.loginfo("Start to draw drivable area:")
+        rospy.loginfo("drivable area point num: %d\n\n\n\n", len(tstates.drivable_area))
         self._drivable_area_markerarray = MarkerArray()
 
         count = 0
@@ -518,6 +542,8 @@ class DrivingSpaceConstructor:
 
                 self._drivable_area_markerarray.markers.append(tempmarker)
                 count = count + 1
+
+            rospy.loginfo("drivable area drawn!\n\n\n")
 
         #7. next drivable area
         self._next_drivable_area_markerarray = MarkerArray()
@@ -844,7 +870,11 @@ class DrivingSpaceConstructor:
         '''
         tstates.drivable_area = [] #clear in every step
         ego_s = tstates.ego_s
+        rospy.loginfo("Start to deal with drivable area")
+
         if tstates.static_map.in_junction:
+            rospy.loginfo("in junction:")
+            rospy.loginfo("static junction boundary point num: %d", len(tstates.static_map.drivable_area.points))
             ego_x = tstates.ego_vehicle_state.state.pose.pose.position.x
             ego_y = tstates.ego_vehicle_state.state.pose.pose.position.y
 
@@ -982,7 +1012,7 @@ class DrivingSpaceConstructor:
                                     angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
                                     vx = obs.state.twist.twist.linear.x[0]
                                     vy = obs.state.twist.twist.linear.y[0]
-                                    omega = obs.state.twist.twist.angular.z[0]
+                                    omega = obs.state.twist.twist.angular.z
                                     #a boundary only has vertical velocity, thus the direction is fixed. Only need to calculate the velocity value.
                                     vx_list[j] = vx
                                     vy_list[j] = vy
@@ -1021,7 +1051,7 @@ class DrivingSpaceConstructor:
                                     angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
                                     vx = obs.state.twist.twist.linear.x[0]
                                     vy = obs.state.twist.twist.linear.y[0]
-                                    omega = obs.state.twist.twist.angular.z[0]
+                                    omega = obs.state.twist.twist.angular.z
                                     #a boundary only has vertical velocity, thus the direction is fixed. Only need to calculate the velocity value.
                                     #jxy0510: it is proved to be not correct only to keep the vertical velocity.
                                     vx_list[j] = vx
@@ -1047,6 +1077,8 @@ class DrivingSpaceConstructor:
                     del dist_list[j]
                     del vx_list[j]
                     del vy_list[j]
+                    del omega_list[j]
+                    del flag_list[j]
                 if id_list[j] >= 0 and id_list[next_id] != id_list[j]:
                     # velocity of point i means the velocity of the edge between point i and point i+1
                     vx_list[j] = 0
@@ -1061,11 +1093,14 @@ class DrivingSpaceConstructor:
                 flag = flag_list[j]
                 point = [x, y, vx, vy, omega, flag]
                 tstates.drivable_area.append(point)
-
+            
             #close the figure
             tstates.drivable_area.append(tstates.drivable_area[0])
 
+            rospy.loginfo("drivable_area constructed with length %d", len(tstates.drivable_area))
+
         else:
+            rospy.loginfo("in lanes:")
             #create a list of lane section, each section is defined as (start point s, end point s)
             #calculate from the right most lane to the left most lane, drawing drivable area boundary in counterclockwise
             lane_num = len(tstates.static_map.lanes)
@@ -1131,6 +1166,8 @@ class DrivingSpaceConstructor:
             if len(tstates.drivable_area) > 0:
                 tstates.drivable_area.append(tstates.drivable_area[0])
 
+            rospy.loginfo("drivable_area constructed with length %d", len(tstates.drivable_area))
+
     def lane_section_points_generation(self, starts, ends, startvx, startvy, endvx, endvy, lane_boundaries, tstates):
 
         #set the velocity of the start point to 0, since the velocity of point i refers to the velocity of the edge between i and i+1
@@ -1170,10 +1207,10 @@ class DrivingSpaceConstructor:
 
                     pointx = point1.position.x + (point2.position.x - point1.position.x) * (smalls - point1.s) / (point2.s - point1.s)
                     pointy = point1.position.y + (point2.position.y - point1.position.y) * (smalls - point1.s) / (point2.s - point1.s)
-                    point = [pointx, pointy, vx_s, vy_s]
+                    point = [pointx, pointy, vx_s, vy_s, 0, 2]
                     pointlist.append(point)
             elif lane_boundaries[j].boundary_point.s > smalls and lane_boundaries[j].boundary_point.s < bigs:
-                point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0]
+                point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0, 0, 1]
                 pointlist.append(point)
             elif lane_boundaries[j].boundary_point.s >= bigs:
                 if j == 0:
@@ -1188,12 +1225,11 @@ class DrivingSpaceConstructor:
                     v_value = bigvx * math.cos(direction) + bigvy * math.sin(direction)
                     vx_s = v_value * math.cos(direction)
                     vy_s = v_value * math.sin(direction)
-                    #the angular velocity in lanes need not be considered
-                    omega = 0
+                    #the angular velocity in lanes need not be considered, so omega = 0
 
                     pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
                     pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
-                    point = [pointx, pointy, vx_s, vy_s, omega]
+                    point = [pointx, pointy, vx_s, vy_s, 0, 2]
                     pointlist.append(point)
 
         if starts <= ends:

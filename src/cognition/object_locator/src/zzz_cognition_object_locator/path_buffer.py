@@ -44,7 +44,7 @@ class PathBuffer:
         assert type(map_input) == MapState
         with self._static_map_lock:
             self._static_map_buffer = map_input
-        rospy.logdebug("Updating local dynamic map")
+        #rospy.logdebug("Updating local dynamic map")
 
     def receive_ego_state(self, state):
         assert type(state) == RigidBodyStateStamped
@@ -62,7 +62,7 @@ class PathBuffer:
             self._reference_path_buffer = [(waypoint.pose.position.x, waypoint.pose.position.y) 
                                         for waypoint in reversed(reference_path.poses)]
             self._reference_path_changed = True
-        rospy.loginfo("Received reference path, length:%d", len(reference_path.poses))
+        #rospy.loginfo("Received reference path, length:%d", len(reference_path.poses))
 
     def update(self, required_reference_path_length = 10, 
                 front_vehicle_avoidance_require_thres = 2,
@@ -104,7 +104,7 @@ class PathBuffer:
             )
             for _ in range(nearest_idx-remained_passed_point):
                 removed_point = self._reference_path_segment.popleft()
-                rospy.logdebug("removed waypoint: %s, remaining count: %d", str(removed_point), len(self._reference_path_buffer))
+                #rospy.logdebug("removed waypoint: %s, remaining count: %d", str(removed_point), len(self._reference_path_buffer))
 
         # Current reference path is too short, require a new reference path
         # if len(reference_path) < required_reference_path_length and not self._rerouting_sent:

@@ -112,7 +112,7 @@ class CarlaToRosWaypointConverter(object):
         state.state.pose.pose.orientation.z = 0.0
         state.state.pose.pose.orientation.w = 0.0
 
-        rospy.logdebug("Position: %.3f, %.3f", state.state.pose.pose.position.x, state.state.pose.pose.position.y)
+        #rospy.logdebug("Position: %.3f, %.3f", state.state.pose.pose.position.x, state.state.pose.pose.position.y)
         
         self._pose_publisher.publish(state)
 

@@ -68,7 +68,7 @@ class MainController():
             
             return control_msg
 
-        rospy.logdebug("received target speed:%f, current_speed: %f", self.desired_speed, get_speed(self.ego_state))
+        #rospy.logdebug("received target speed:%f, current_speed: %f", self.desired_speed, get_speed(self.ego_state))
         
         ego_pose = self.ego_state.pose.pose
 
