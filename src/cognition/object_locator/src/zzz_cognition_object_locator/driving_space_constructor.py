@@ -130,14 +130,30 @@ class DrivingSpaceConstructor:
         self.dynamic_boundary.header.frame_id = "map"
         self.dynamic_boundary.header.stamp = rospy.Time.now()
         for i in range(len(tstates.drivable_area)):
-            
             drivable_area_point = tstates.drivable_area[i]
             boundary_point = DynamicBoundaryPoint()
             boundary_point.x = drivable_area_point[0]
             boundary_point.y = drivable_area_point[1]
             boundary_point.vx = drivable_area_point[2]
             boundary_point.vy = drivable_area_point[3]
+            boundary_point.omega = drivable_area_point[4]
+            boundary_point.flag = drivable_area_point[5]
             self.dynamic_boundary.boundary.append(boundary_point)
+
+        #jxy0510: extend the dynamic boundary by lanes
+        for lane in tstates.static_map.lanes:
+            if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
+                #the left most lane boundary line cannot be broken, or else it won't be the left most lane
+                if lane.right_boundaries[0].boundary_type == 1:
+                    for lb in lane.right_boundaries:
+                        lane_point = DynamicBoundaryPoint()
+                        lane_point.x = lb.boundary_point.position.x
+                        lane_point.y = lb.boundary_point.position.y
+                        lane_point.vx = 0
+                        lane_point.vy = 0
+                        lane_point.omega = 0
+                        lane_point.flag = 3
+                        self.dynamic_boundary.boundary.append(lane_point)
 
         #visualization
         #1. lanes
@@ -832,11 +848,14 @@ class DrivingSpaceConstructor:
             ego_x = tstates.ego_vehicle_state.state.pose.pose.position.x
             ego_y = tstates.ego_vehicle_state.state.pose.pose.position.y
 
+            #a boundary point is represented by 6 numbers, namely x, y, vx, vy, omega and flag
             angle_list = []
             dist_list = []
             vx_list = []
             vy_list = []
             id_list = []
+            omega_list = []
+            flag_list = []
 
             if len(tstates.static_map.drivable_area.points) >= 3:
                 for i in range(len(tstates.static_map.drivable_area.points)):
@@ -855,12 +874,16 @@ class DrivingSpaceConstructor:
                             #the velocity of static boundary is 0
                             vx_list.append(0)
                             vy_list.append(0)
+                            omega_list.append(0)
+                            flag_list.append(1) #static boundary
                             id_list.append(-1) #static boundary, interp points (can be deleted)
                     
                     angle_list.append(math.atan2(node_point.y - ego_y, node_point.x - ego_x))
                     dist_list.append(math.sqrt(pow((node_point.x - ego_x), 2) + pow((node_point.y - ego_y), 2)))
                     vx_list.append(0)
                     vy_list.append(0)
+                    omega_list.append(0)
+                    flag_list.append(1) #static boundary
                     id_list.append(-2) #static boundary, nodes (cannot be deleted)
                     
             else:
@@ -959,10 +982,12 @@ class DrivingSpaceConstructor:
                                     angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
                                     vx = obs.state.twist.twist.linear.x[0]
                                     vy = obs.state.twist.twist.linear.y[0]
+                                    omega = obs.state.twist.twist.angular.z[0]
                                     #a boundary only has vertical velocity, thus the direction is fixed. Only need to calculate the velocity value.
-                                    v_value = vx * math.cos(direction + math.pi/2) + vy * math.sin(direction + math.pi/2)
-                                    vx_list[j] = v_value * math.cos(direction + math.pi/2)
-                                    vy_list[j] = v_value * math.sin(direction + math.pi/2)
+                                    vx_list[j] = vx
+                                    vy_list[j] = vy
+                                    omega_list[j] = omega
+                                    flag_list[j] = 2 #dynamic boundary
                                     id_list[j] = i + id_extra_flag #mark that this point is updated by the ith obstacle
                                     check_list[j] = 1
                             elif (angle_list[j] + 2 * math.pi) > corner_list_angle[small_corner_id] and (angle_list[j] + 2 * math.pi) < corner_list_angle[big_corner_id]:
@@ -996,10 +1021,13 @@ class DrivingSpaceConstructor:
                                     angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
                                     vx = obs.state.twist.twist.linear.x[0]
                                     vy = obs.state.twist.twist.linear.y[0]
+                                    omega = obs.state.twist.twist.angular.z[0]
                                     #a boundary only has vertical velocity, thus the direction is fixed. Only need to calculate the velocity value.
-                                    v_value = vx * math.cos(direction + math.pi/2) + vy * math.sin(direction + math.pi/2)
-                                    vx_list[j] = v_value * math.cos(direction + math.pi/2)
-                                    vy_list[j] = v_value * math.sin(direction + math.pi/2)
+                                    #jxy0510: it is proved to be not correct only to keep the vertical velocity.
+                                    vx_list[j] = vx
+                                    vy_list[j] = vy
+                                    omega_list[j] = omega
+                                    flag_list[j] = 2
                                     id_list[j] = i + id_extra_flag
 
             # merge the points of the same object to compress the data
@@ -1029,7 +1057,9 @@ class DrivingSpaceConstructor:
                 y = ego_y + dist_list[j] * math.sin(angle_list[j])
                 vx = vx_list[j]
                 vy = vy_list[j]
-                point = [x, y, vx, vy]
+                omega = omega_list[j]
+                flag = flag_list[j]
+                point = [x, y, vx, vy, omega, flag]
                 tstates.drivable_area.append(point)
 
             #close the figure
@@ -1158,10 +1188,12 @@ class DrivingSpaceConstructor:
                     v_value = bigvx * math.cos(direction) + bigvy * math.sin(direction)
                     vx_s = v_value * math.cos(direction)
                     vy_s = v_value * math.sin(direction)
+                    #the angular velocity in lanes need not be considered
+                    omega = 0
 
                     pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
                     pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
-                    point = [pointx, pointy, vx_s, vy_s]
+                    point = [pointx, pointy, vx_s, vy_s, omega]
                     pointlist.append(point)
 
         if starts <= ends:

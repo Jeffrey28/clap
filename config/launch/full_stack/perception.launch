@@ -1,6 +1,6 @@
 <launch>
-    <arg name="enable_camera" default="true"/>
-    <arg name="enable_lidar" default="true"/>
+    <arg name="enable_camera" default="false"/>
+    <arg name="enable_lidar" default="false"/>
 
     <arg name="left_camera_topic" default="/carla/ego_vehicle/camera/rgb/Center"/>
     <arg name="right_camera_topic" default="/carla/ego_vehicle/camera/rgb/Right"/>
