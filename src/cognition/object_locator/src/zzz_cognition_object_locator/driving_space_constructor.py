@@ -332,7 +332,7 @@ class DrivingSpaceConstructor:
                     tempmarker.color.a = 0.5
                     tempmarker.lifetime = rospy.Duration(0.5)
 
-                    #quaternion transform for ego velocity
+                    #quaternion transform for obs velocity in carla 0.9.8
 
                     x = obs.state.pose.pose.orientation.x
                     y = obs.state.pose.pose.orientation.y
@@ -542,8 +542,6 @@ class DrivingSpaceConstructor:
 
                 self._drivable_area_markerarray.markers.append(tempmarker)
                 count = count + 1
-
-            rospy.loginfo("drivable area drawn!\n\n\n")
 
         #7. next drivable area
         self._next_drivable_area_markerarray = MarkerArray()
@@ -1002,18 +1000,23 @@ class DrivingSpaceConstructor:
 
                                 #boundary direction
                                 direction = math.atan2(corner_list_y[corner2] - corner_list_y[corner1], corner_list_x[corner2] - corner_list_x[corner1])
-
+                                
                                 cross_position_x = corner_list_x[corner2] + (corner_list_x[corner1] - corner_list_x[corner2]) * (angle_list[j] - corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
                                 cross_position_y = corner_list_y[corner2] + (corner_list_y[corner1] - corner_list_y[corner2]) * (angle_list[j] - corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
                                 obstacle_dist = math.sqrt(pow((cross_position_x - ego_x), 2) + pow((cross_position_y - ego_y), 2))
                                 #TODO: find a more accurate method
                                 if dist_list[j] > obstacle_dist:
+                                    
+                                    # Adapt to carla 0.9.8
+                                    vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
+                                    vel_world = np.matmul(rotation_mat, vel_obs)
+                                    #check if it should be reversed
+                                    vx = vel_world[0]
+                                    vy = vel_world[1]
+                                    omega = obs.state.twist.twist.angular.z
+
                                     dist_list[j] = obstacle_dist
                                     angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
-                                    vx = obs.state.twist.twist.linear.x[0]
-                                    vy = obs.state.twist.twist.linear.y[0]
-                                    omega = obs.state.twist.twist.angular.z
-                                    #a boundary only has vertical velocity, thus the direction is fixed. Only need to calculate the velocity value.
                                     vx_list[j] = vx
                                     vy_list[j] = vy
                                     omega_list[j] = omega
@@ -1047,13 +1050,17 @@ class DrivingSpaceConstructor:
                                 obstacle_dist = math.sqrt(pow((cross_position_x - ego_x), 2) + pow((cross_position_y - ego_y), 2))
                                 #TODO: find a more accurate method
                                 if dist_list[j] > obstacle_dist:
+                                    # Adapt to carla 0.9.8
+                                    vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
+                                    vel_world = np.matmul(rotation_mat, vel_obs)
+                                    #check if it should be reversed
+                                    vx = vel_world[0]
+                                    vy = vel_world[1]
+                                    omega = obs.state.twist.twist.angular.z
+                                    
+                                    #jxy0510: it is proved to be not correct only to keep the vertical velocity.
                                     dist_list[j] = obstacle_dist
                                     angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
-                                    vx = obs.state.twist.twist.linear.x[0]
-                                    vy = obs.state.twist.twist.linear.y[0]
-                                    omega = obs.state.twist.twist.angular.z
-                                    #a boundary only has vertical velocity, thus the direction is fixed. Only need to calculate the velocity value.
-                                    #jxy0510: it is proved to be not correct only to keep the vertical velocity.
                                     vx_list[j] = vx
                                     vy_list[j] = vy
                                     omega_list[j] = omega
