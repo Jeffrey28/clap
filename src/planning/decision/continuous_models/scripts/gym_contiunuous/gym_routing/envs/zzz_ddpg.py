@@ -54,10 +54,26 @@ class ZZZCarlaEnv(gym.Env):
         high_action = np.array([4.0, 15/3.6])  #Should be symmetry for DDPG
         self.action_space = spaces.Box(low=low_action, high=high_action, dtype=np.float32)
 
-        self.state_dimention = 16
+        self.state_dimention = 600
 
-        low  = np.array([-100,  -100,   -20,  -20,  -100, -100,  -20,   -20,   -100, -100,   -20,  -20, -100,  -100, -20, -20])
-        high = np.array([100, 100, 20, 20, 100, 100, 20, 20, 100, 100, 20, 20,100, 100, 20, 20])    
+        low  = np.zeros(600)
+        high = np.zeros(600)   
+
+        for i in range(100):
+            # s d vs vd omega flag
+            low[i*6] = -100
+            low[i*6+1] = -100
+            low[i*6+2] = -15
+            low[i*6+3] = -7
+            low[i*6+4] = -5
+            low[i*6+5] = 0
+            
+            high[i*6] = 100
+            high[i*6+1] = 100
+            high[i*6+2] = 15
+            high[i*6+3] = 7
+            high[i*6+4] = 5
+            high[i*6+5] = 3
 
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
         self.seed()
@@ -80,12 +96,12 @@ class ZZZCarlaEnv(gym.Env):
                 # wait next state
                 received_msg = msgpack.unpackb(self.sock_conn.recv(self.sock_buffer))
                 print("-------------received msg in step")
-                self.state = received_msg[0:16]
-                collision = received_msg[16]
-                leave_current_mmap = received_msg[17]
-                threshold = received_msg[18]
-                RLpointx = received_msg[19]
-                RLpointy = received_msg[20]
+                self.state = received_msg[0:600]
+                collision = received_msg[600]
+                leave_current_mmap = received_msg[601]
+                threshold = received_msg[602]
+                RLpointx = received_msg[603]
+                RLpointy = received_msg[604]
                 self.rule_based_action = [(RLpointx, RLpointy)]
 
                 # calculate reward
@@ -158,11 +174,11 @@ class ZZZCarlaEnv(gym.Env):
                 received_msg = msgpack.unpackb(self.sock_conn.recv(self.sock_buffer))
                 print("-------------received msg in reset")
 
-                self.state = received_msg[0:16]
-                collision = received_msg[16]
-                leave_current_mmap = received_msg[17]
-                RLpointx = received_msg[18]
-                RLpointy = received_msg[19]
+                self.state = received_msg[0:600]
+                collision = received_msg[600]
+                leave_current_mmap = received_msg[601]
+                RLpointx = received_msg[603]
+                RLpointy = received_msg[604]
                 self.rule_based_action = [(RLpointx,RLpointy - 12.5/3.6)]
 
                 return np.array(self.state), np.array(self.rule_based_action)

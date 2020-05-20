@@ -45,6 +45,7 @@ class LocalMap(object):
 
         self._in_section_flag = None
         self._near_section_flag = None
+        self._start_flag = None
 
         client = carla.Client('localhost', 2000)
         client.set_timeout(10.0)
@@ -168,9 +169,12 @@ class LocalMap(object):
             _, closestLane = min((dist, lane) for lane, dist in lanes)
             new_edge = closestLane.getEdge()
             new_edge.id = new_edge.getID()
-            rospy.logdebug("Found ego vehicle neighbor edge id = %s",new_edge.id)
-            if self._current_edge_id is None or new_edge.id != self._current_edge_id:
+            rospy.loginfo("Found ego vehicle neighbor edge id = %s",new_edge.id)
+            if self._current_edge_id is None or new_edge.id != self._current_edge_id or (abs(map_x + 10) < 1 and abs(map_y - 96) < 1):
+                #TODO: check when change map!!
+                #jxy0518: in RL, when bump in the first section, the vehicle will go back to the start point without edge id changing.
                 rospy.loginfo("Should update static map, edge id %s -> %s", self._current_edge_id, new_edge.id)
+                rospy.loginfo("We are at point %f %f", map_x, map_y)
                 self._in_section_flag = 0
                 self._near_section_flag = 0
                 return 1
@@ -216,10 +220,14 @@ class LocalMap(object):
         '''
         rospy.logdebug("Updating static map")
         self.static_local_map = self.init_static_map() ## Return this one
+
+        start = time.time()
+        middle = time.time()
         
         # jxy: optimized repeated calculation
         if update_mode == 1:
             self.update_lane_list()
+            middle = time.time()
             self.update_target_lane()
         if update_mode == 3:
             self.update_lane_list()
@@ -234,9 +242,12 @@ class LocalMap(object):
         if not self.static_local_map.in_junction:
             self.calibrate_lane_index() # make the righest lane index 0
 
-        rospy.loginfo("Updated static map info: lane_number = %d, in_junction = %d, current_edge_id = %s, target_lane_index = %s",
+        end = time.time()
+
+        rospy.loginfo("Updated static map info: lane_number = %d, in_junction = %d, current_edge_id = %s, \
+            target_lane_index = %s, time consume = %f, update_lane_list time = %f",
             len(self.static_local_map.lanes), int(self.static_local_map.in_junction),
-            self._current_edge_id, self.static_local_map.target_lane_index)
+            self._current_edge_id, self.static_local_map.target_lane_index, 1000*(end-start), 1000*(middle-start))
 
     def update_next_lanes(self, step_length = 20):
 
@@ -384,7 +395,8 @@ class LocalMap(object):
 
             count = count + 1
 
-            if (flag_straight == 0 and count % 3 == 1) or count % 10 == 1 or count == len(lane.getShape()):
+            #if (flag_straight == 0 and count % 3 == 1) or count % 10 == 1 or count == len(lane.getShape()):
+            if (0):
                 # too slow... cost about 7s, so divide by 10, but distance becomes 10 times (5m). If direction changes, reduce the gap.
                 # we start to know the direction at point 2. TODO: actually the direction at point 1 can be gained by considering the next point.
 

@@ -470,7 +470,7 @@ class DrivingSpaceConstructor:
 
         #6. drivable area
         rospy.loginfo("Start to draw drivable area:")
-        rospy.loginfo("drivable area point num: %d\n\n\n\n", len(tstates.drivable_area))
+        rospy.loginfo("drivable area point num: %d", len(tstates.drivable_area))
         self._drivable_area_markerarray = MarkerArray()
 
         count = 0
