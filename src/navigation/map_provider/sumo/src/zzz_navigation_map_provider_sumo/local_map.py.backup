@@ -76,7 +76,7 @@ class LocalMap(object):
             rospy.logerr("Cannot load map with unknown type")
         elif mtype == 'opendrive':
             command = ['netconvert', "--opendrive-files", file,
-                "--opendrive.import-all-lanes", "false",
+                "--opendrive.import-all-lanes", "true",
                 "--offset.disable-normalization", "true",
                 "--opendrive.curve-resolution", "0.5",
                 "-o", converted_file]
@@ -232,10 +232,10 @@ class LocalMap(object):
         if update_mode == 3:
             self.update_lane_list()
             self.update_target_lane()
-            #self.update_next_junction()
+            self.update_next_junction()
         if update_mode == 2:
             self.update_junction()
-            #self.update_next_lanes()
+            self.update_next_lanes()
         if update_mode == 4:
             self.update_junction()
 
@@ -341,15 +341,15 @@ class LocalMap(object):
 
             self._current_edge_id = self.new_edge.getID()
             lanes_in_edge = self.new_edge.getLanes()
-            for i in range(len(lanes_in_edge)):
-                connections_outgoing = lanes_in_edge[i].getOutgoing()
+            for lane in lanes_in_edge:
+                connections_outgoing = lane.getOutgoing()
                 # Remove fake lane, TODO(zyxin): Remove using SUMO properties (green verge lanes, http://sumo.sourceforge.net/pydoc/sumolib.net.lane.html)
                 if len(connections_outgoing) < 1:
                     continue
-                lane_wrapped = self.wrap_lane(lanes_in_edge[i], i)
+                lane_wrapped = self.wrap_lane(lane)
                 self.static_local_map.lanes.append(lane_wrapped)
 
-    def wrap_lane(self, lane, index):
+    def wrap_lane(self, lane):
         '''
         Wrap lane information into ROS message
         '''
@@ -395,8 +395,8 @@ class LocalMap(object):
 
             count = count + 1
 
-            if (flag_straight == 0 and count % 3 == 1) or count % 10 == 1 or count == len(lane.getShape()):
-            #if (0):
+            #if (flag_straight == 0 and count % 3 == 1) or count % 10 == 1 or count == len(lane.getShape()):
+            if (0):
                 # too slow... cost about 7s, so divide by 10, but distance becomes 10 times (5m). If direction changes, reduce the gap.
                 # we start to know the direction at point 2. TODO: actually the direction at point 1 can be gained by considering the next point.
 
@@ -404,14 +404,6 @@ class LocalMap(object):
                 location.x = x
                 location.y = y
                 waypoint = self._world.get_map().get_waypoint(location)
-
-                '''
-                rospy.loginfo("Road id in OpenDRIVE: %d", waypoint.road_id)
-                rospy.loginfo("SUMO road id: %s", self._current_edge_id)
-                rospy.loginfo("Lane id in OpenDRIVE: %d", waypoint.lane_id)
-                rospy.loginfo("Lane type in OpenDRIVE: %s", waypoint.lane_type)
-                rospy.loginfo("Lane id in SUMO: %d", index)
-                '''
 
                 angle = 3.1415927/2 - last_tangent
                 left_bound.boundary_point.s = point.s

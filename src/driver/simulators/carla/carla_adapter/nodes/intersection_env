@@ -123,7 +123,7 @@ def collision_callback(msg):
     collision_signal = True
 
 def local_static_map_callback(msg):
-    print("Now we enter local static map callback")
+    #print("Now we enter local static map callback")
     global if_intersection
     if msg.in_junction:
         if_intersection = True
@@ -573,7 +573,7 @@ if __name__ == "__main__":
     rate = rospy.Rate(20)
 
     # Generate Reference Path
-    dao = GlobalRoutePlannerDAO(carla_world.get_map())
+    dao = GlobalRoutePlannerDAO(carla_world.get_map(), 1)
     calculate_route(first_start, first_goal)
     # ReferencePathGenerator = CarlaToRosWaypointConverter(carla_world, first_start, first_goal)
     trajectory_state = 1
