@@ -47,6 +47,11 @@ class LocalMap(object):
         self._near_section_flag = None
         self._start_flag = None
 
+        self._next_edge_id = None
+        self._next_junction_id = None
+
+        self._next_map_buffer = Map()
+
         client = carla.Client('localhost', 2000)
         client.set_timeout(10.0)
         self._world = client.get_world()
@@ -156,7 +161,7 @@ class LocalMap(object):
         return None
 
 
-    def should_update_static_map(self, perception_range_demand = 10, lane_end_dist_thres = 2):
+    def should_update_static_map(self, perception_range_demand = 15, lane_end_dist_thres = 2):
         '''
         Determine whether map updating is needed.
         '''
@@ -197,7 +202,7 @@ class LocalMap(object):
                 else:
                     # in lanes, far from the next junction
                     self._in_section_flag = 0
-        if len(lanes) == 0:
+        if len(lanes) == 0 and self._in_section_flag != 1:
             self._near_section_flag = 0
             if self._in_section_flag != 0:
                 #just enter the section
@@ -219,7 +224,7 @@ class LocalMap(object):
         Update information in the static map if current location changed dramatically
         '''
         rospy.logdebug("Updating static map")
-        self.static_local_map = self.init_static_map() ## Return this one
+        self.static_local_map = self.init_static_map() ## Return this one        
 
         start = time.time()
         middle = time.time()
@@ -232,10 +237,10 @@ class LocalMap(object):
         if update_mode == 3:
             self.update_lane_list()
             self.update_target_lane()
-            #self.update_next_junction()
+            self.update_next_junction()
         if update_mode == 2:
             self.update_junction()
-            #self.update_next_lanes()
+            self.update_next_lanes()
         if update_mode == 4:
             self.update_junction()
 
@@ -244,9 +249,9 @@ class LocalMap(object):
 
         end = time.time()
 
-        rospy.loginfo("Updated static map info: lane_number = %d, in_junction = %d, current_edge_id = %s, \
+        rospy.loginfo("Updated static map info: update mode = %d, lane_number = %d, in_junction = %d, current_edge_id = %s, \
             target_lane_index = %s, time consume = %f, update_lane_list time = %f",
-            len(self.static_local_map.lanes), int(self.static_local_map.in_junction),
+            update_mode, len(self.static_local_map.lanes), int(self.static_local_map.in_junction),
             self._current_edge_id, self.static_local_map.target_lane_index, 1000*(end-start), 1000*(middle-start))
 
     def update_next_lanes(self, step_length = 20):
@@ -266,8 +271,15 @@ class LocalMap(object):
                     current_edge = closestLane.getEdge()
                     if i == nearest_idx:
                         # the nearest point is in the edge, so the vehicle is still in the last edge
-                        last_edge = current_edge.getID
-                    elif last_edge is None or last_edge != current_edge.getID:
+                        last_edge = current_edge.getID()
+                        
+                    elif last_edge is None or last_edge != current_edge.getID():
+                        #jxy: next map buffer should be reinitialized and updated
+                        self._next_edge_id = current_edge.getID()
+                        print "next_edge_id is:"
+                        print self._next_edge_id
+
+                        self._next_map_buffer.lanes = []
 
                         lanes_in_edge = current_edge.getLanes()
                         for lane in lanes_in_edge:
@@ -277,6 +289,7 @@ class LocalMap(object):
                                 continue
                             lane_wrapped = self.wrap_lane(lane)
                             self.static_local_map.next_lanes.append(lane_wrapped)
+                            self._next_map_buffer.lanes.append(lane_wrapped)
 
                         return
 
@@ -293,6 +306,12 @@ class LocalMap(object):
             if d < closest_dist:
                 node_id = i
                 closest_dist = d
+
+        #jxy: accel by loading the junction before entering it
+        if self._next_junction_id == node_id:
+            self.static_local_map.drivable_area = self._next_map_buffer.drivable_area
+
+            return
 
         for node_point in nodes[node_id].getShape():
             point = Point32()
@@ -318,13 +337,19 @@ class LocalMap(object):
             if d < closest_dist:
                 node_id = i
                 closest_dist = d
+        
+        #jxy: next junction should be reinitialized and updated
+        self._next_junction_id = node_id
+        self._next_map_buffer.drivable_area.points = []
 
         for node_point in nodes[node_id].getShape():
             point = Point32()
             point.x = node_point[0]
             point.y = node_point[1]
 
-            self.static_local_map.next_drivable_area.points.append(point)        
+            self.static_local_map.next_drivable_area.points.append(point)
+            self._next_map_buffer.drivable_area.points.append(point)
+
 
     def update_lane_list(self):
         '''
@@ -339,17 +364,31 @@ class LocalMap(object):
             self.new_lane = closestLane
             self.new_edge = closestLane.getEdge()
 
+            #jxy: accel by directly load the existing next lane information, so we can start to load the lanes before we enter the edge
             self._current_edge_id = self.new_edge.getID()
+            if self._current_edge_id == self._next_edge_id:
+                #correctly enter the next edge
+                self.static_local_map.lanes = self._next_map_buffer.lanes
+
+                rospy.loginfo("Updating lane by buffer!")
+
+                return
+
+            rospy.loginfo("Updating lane independently!")
+            print self._next_edge_id
+            print self._current_edge_id
+
+            #if enter the wrong edge (unplanned)
             lanes_in_edge = self.new_edge.getLanes()
             for i in range(len(lanes_in_edge)):
                 connections_outgoing = lanes_in_edge[i].getOutgoing()
                 # Remove fake lane, TODO(zyxin): Remove using SUMO properties (green verge lanes, http://sumo.sourceforge.net/pydoc/sumolib.net.lane.html)
                 if len(connections_outgoing) < 1:
                     continue
-                lane_wrapped = self.wrap_lane(lanes_in_edge[i], i)
+                lane_wrapped = self.wrap_lane(lanes_in_edge[i])
                 self.static_local_map.lanes.append(lane_wrapped)
 
-    def wrap_lane(self, lane, index):
+    def wrap_lane(self, lane):
         '''
         Wrap lane information into ROS message
         '''

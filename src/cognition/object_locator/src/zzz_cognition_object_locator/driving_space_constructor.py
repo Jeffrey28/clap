@@ -399,6 +399,8 @@ class DrivingSpaceConstructor:
         #5. ego vehicle visualization
         self._ego_markerarray = MarkerArray()
 
+        rospy.loginfo("We are at position: %f %f\n\n\n\n", tstates.ego_vehicle_state.state.pose.pose.position.x, tstates.ego_vehicle_state.state.pose.pose.position.y)
+
         tempmarker = Marker()
         tempmarker.header.frame_id = "map"
         tempmarker.header.stamp = rospy.Time.now()
