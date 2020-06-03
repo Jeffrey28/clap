@@ -57,7 +57,10 @@ class CarlaToRosWaypointConverter(object):
         # set initial goal
 
         self.start = setstart
-        self.goal = setgoal;
+        self.goal = setgoal
+        rospy.loginfo("start and goal?")
+        print setstart
+        print setgoal
         
         self.current_route = None
         self.goal_subscriber = rospy.Subscriber(

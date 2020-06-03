@@ -23,10 +23,8 @@ def calculate_next_drivable_area(tstates):
     '''
     The drivable area in the next unit of road (i.e. junction or road section)
     '''
-    #TODO: now only support junction, static
     tstates.next_drivable_area = [] #clear in every step
     ego_s = 0 # ego_s should be 0 since it is the startp of the next lanes
-    #TODO: input s when entering the next lanes
     rospy.loginfo("Start to deal with drivable area")
 
     if not tstates.static_map.in_junction:
@@ -172,7 +170,8 @@ def calculate_next_drivable_area(tstates):
                                 
                                 # Adapt to carla 0.9.8
                                 vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
-                                vel_world = np.matmul(rotation_mat, vel_obs)
+                                #vel_world = np.matmul(rotation_mat, vel_obs)
+                                vel_world = vel_obs
                                 #check if it should be reversed
                                 vx = vel_world[0]
                                 vy = vel_world[1]
@@ -215,7 +214,8 @@ def calculate_next_drivable_area(tstates):
                             if dist_list[j] > obstacle_dist:
                                 # Adapt to carla 0.9.8
                                 vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
-                                vel_world = np.matmul(rotation_mat, vel_obs)
+                                #vel_world = np.matmul(rotation_mat, vel_obs)
+                                vel_world = vel_obs
                                 #check if it should be reversed
                                 vx = vel_world[0]
                                 vy = vel_world[1]
@@ -286,10 +286,18 @@ def calculate_next_drivable_area(tstates):
             lane_sections[i, 5] = 0 #vy behind
             #TODO: projection to the vertial direction
 
-        for obstacle in tstates.obstacles:
+        for obstacle in tstates.surrounding_object_list:
+            #TODO: judge those in the next lanes
+            if len(tstates.static_map.next_lanes) != 0:
+                obstacle.lane_index, obstacle.lane_dist_left_t, obstacle.lane_dist_right_t, obstacle.lane_anglediff, obstacle.lane_dist_s \
+                    = locate_object_in_next_lane(obstacle.state, tstates, obstacle.dimension)
+            else:
+                obstacle.lane_index = -1
+
             if obstacle.lane_index == -1:
                 continue
             else:
+                print obstacle.lane_dist_s
                 #the obstacle in on the same road as the ego vehicle
                 lane_index_rounded = int(round(obstacle.lane_index))
                 #TODO: consider those on the lane boundary
@@ -560,7 +568,8 @@ def calculate_drivable_area(tstates):
                                 
                                 # Adapt to carla 0.9.8
                                 vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
-                                vel_world = np.matmul(rotation_mat, vel_obs)
+                                #vel_world = np.matmul(rotation_mat, vel_obs)
+                                vel_world = vel_obs
                                 #check if it should be reversed
                                 vx = vel_world[0]
                                 vy = vel_world[1]
@@ -603,7 +612,8 @@ def calculate_drivable_area(tstates):
                             if dist_list[j] > obstacle_dist:
                                 # Adapt to carla 0.9.8
                                 vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
-                                vel_world = np.matmul(rotation_mat, vel_obs)
+                                #vel_world = np.matmul(rotation_mat, vel_obs)
+                                vel_world = vel_obs
                                 #check if it should be reversed
                                 vx = vel_world[0]
                                 vy = vel_world[1]
@@ -799,3 +809,123 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
         for i in range(len(pointlist)):
             j = len(pointlist) - 1 - i
             tstates.drivable_area.append(pointlist[j])
+
+
+def locate_object_in_next_lane(object, tstates, dimension, dist_list=None, lane_dist_thres=5):
+    '''
+    Calculate (continuous) lane index for a object.
+    Parameters: dist_list is the distance buffer. If not provided, it will be calculated
+    '''
+    static_map_next_lane_path_array = get_lane_array(tstates.static_map.next_lanes)
+    static_map_next_lane_tangets = [[point.tangent for point in lane.central_path_points] for lane in tstates.static_map.next_lanes]
+
+    if not dist_list:
+        dist_list = np.array([dist_from_point_to_polyline2d(
+            object.pose.pose.position.x,
+            object.pose.pose.position.y,
+            lane) for lane in static_map_next_lane_path_array]) # here lane is a python list of (x, y)
+    
+    # Check if there's only two lanes
+    if len(tstates.static_map.next_lanes) < 2:
+        closest_lane = second_closest_lane = 0
+    else:
+        closest_lane, second_closest_lane = np.abs(dist_list[:, 0]).argsort()[:2]
+
+    # Signed distance from target to two closest lane
+    closest_lane_dist, second_closest_lane_dist = dist_list[closest_lane, 0], dist_list[second_closest_lane, 0]
+
+    if abs(closest_lane_dist) > lane_dist_thres:
+        return -1, -99, -99, -99, -99 # TODO: return reasonable value
+
+    lane = tstates.static_map.next_lanes[closest_lane]
+    left_boundary_array = np.array([(lbp.boundary_point.position.x, lbp.boundary_point.position.y) for lbp in lane.left_boundaries])
+    right_boundary_array = np.array([(lbp.boundary_point.position.x, lbp.boundary_point.position.y) for lbp in lane.right_boundaries])
+
+    if len(left_boundary_array) == 0:
+        ffstate = get_frenet_state(object,
+                        static_map_next_lane_path_array[closest_lane],
+                        static_map_next_lane_tangets[closest_lane]
+                    )
+        lane_anglediff = ffstate.psi
+        lane_dist_s = ffstate.s
+        return closest_lane, -1, -1, lane_anglediff, lane_dist_s
+    else:
+        # Distance to lane considering the size of the object
+        x = object.pose.pose.orientation.x
+        y = object.pose.pose.orientation.y
+        z = object.pose.pose.orientation.z
+        w = object.pose.pose.orientation.w
+
+        rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
+        rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
+
+        vector_x = np.array([dimension.length_x, 0, 0])
+        vector_y = np.array([0, dimension.length_y, 0])
+        dx = np.matmul(rotation_mat_inverse, vector_x)
+        dy = np.matmul(rotation_mat_inverse, vector_y)
+
+        #the four corners of the object, in bird view: left front is 0, counterclockwise.
+        #TODO: may consider 8 corners in the future
+        corner_list_x = np.zeros(4)
+        corner_list_y = np.zeros(4)
+        corner_list_x[0] = object.pose.pose.position.x + dx[0]/2.0 + dy[0]/2.0
+        corner_list_y[0] = object.pose.pose.position.y + dx[1]/2.0 + dy[1]/2.0
+        corner_list_x[1] = object.pose.pose.position.x - dx[0]/2.0 + dy[0]/2.0
+        corner_list_y[1] = object.pose.pose.position.y - dx[1]/2.0 + dy[1]/2.0
+        corner_list_x[2] = object.pose.pose.position.x - dx[0]/2.0 - dy[0]/2.0
+        corner_list_y[2] = object.pose.pose.position.y - dx[1]/2.0 - dy[1]/2.0
+        corner_list_x[3] = object.pose.pose.position.x + dx[0]/2.0 - dy[0]/2.0
+        corner_list_y[3] = object.pose.pose.position.y + dx[1]/2.0 - dy[1]/2.0
+
+        dist_left_list_all = np.array([dist_from_point_to_polyline2d(
+                corner_list_x[i],
+                corner_list_y[i],
+                left_boundary_array) for i in range(4)])
+        dist_right_list_all = np.array([dist_from_point_to_polyline2d(
+                corner_list_x[i],
+                corner_list_y[i],
+                right_boundary_array) for i in range(4)])
+
+        dist_left_list = dist_left_list_all[:, 0]
+        dist_right_list = dist_right_list_all[:, 0]
+
+        lane_dist_left_t = -99
+        lane_dist_right_t = -99
+
+        if np.min(dist_left_list) * np.max(dist_left_list) <= 0:
+            # the object is on the left boundary of lane
+            lane_dist_left_t = 0
+        else:
+            lane_dist_left_t = np.sign(np.min(dist_left_list)) * np.min(np.abs(dist_left_list))
+
+        if np.min(dist_right_list) * np.max(dist_right_list) <= 0:
+            # the object is on the right boundary of lane
+            lane_dist_right_t = 0
+        else:
+            lane_dist_right_t = np.sign(np.min(dist_right_list)) * np.min(np.abs(dist_right_list))
+
+        if np.min(dist_left_list) * np.max(dist_left_list) > 0 and np.min(dist_right_list) * np.max(dist_right_list) > 0:
+            if np.min(dist_left_list) * np.max(dist_right_list) >= 0:
+                # the object is out of the road
+                closest_lane = -1
+            
+        ffstate = get_frenet_state(object,
+                        static_map_next_lane_path_array[closest_lane],
+                        static_map_next_lane_tangets[closest_lane]
+                    )
+        lane_anglediff = ffstate.psi
+        lane_dist_s = ffstate.s # this is also helpful in getting ego s coordinate in the road
+
+        # Judge whether the point is outside of lanes
+        if closest_lane == -1:
+            # The object is at left or right most
+            return closest_lane, lane_dist_left_t, lane_dist_right_t, lane_anglediff, lane_dist_s
+        else:
+            # The object is between center line of lanes
+            a, b = closest_lane, second_closest_lane
+            la, lb = abs(closest_lane_dist), abs(second_closest_lane_dist)
+            if lb + la == 0:
+                lane_index_return = -1
+            else:
+                lane_index_return = (b*la + a*lb)/(lb + la)
+            return lane_index_return, lane_dist_left_t, lane_dist_right_t, lane_anglediff, lane_dist_s
