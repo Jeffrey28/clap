@@ -343,7 +343,8 @@ class DrivingSpaceConstructor:
                     rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
 
                     vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
-                    vel_world = np.matmul(rotation_mat, vel_obs)
+                    #vel_world = np.matmul(rotation_mat, vel_obs)
+                    vel_world = vel_obs
                     #check if it should be reversed
                     obs_vx_world = vel_world[0]
                     obs_vy_world = vel_world[1]
@@ -1011,7 +1012,8 @@ class DrivingSpaceConstructor:
                                     
                                     # Adapt to carla 0.9.8
                                     vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
-                                    vel_world = np.matmul(rotation_mat, vel_obs)
+                                    #vel_world = np.matmul(rotation_mat, vel_obs)
+                                    vel_world = vel_obs
                                     #check if it should be reversed
                                     vx = vel_world[0]
                                     vy = vel_world[1]
@@ -1054,7 +1056,8 @@ class DrivingSpaceConstructor:
                                 if dist_list[j] > obstacle_dist:
                                     # Adapt to carla 0.9.8
                                     vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
-                                    vel_world = np.matmul(rotation_mat, vel_obs)
+                                    #vel_world = np.matmul(rotation_mat, vel_obs)
+                                    vel_world = vel_obs
                                     #check if it should be reversed
                                     vx = vel_world[0]
                                     vy = vel_world[1]

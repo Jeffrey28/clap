@@ -31,7 +31,6 @@ class LaneUtility(object):
             return -1, self.longitudinal_model_instance.longitudinal_speed(-1)
 
         target_index = self.generate_lane_change_index()
-        # target_index = ego_lane_index_rounded
         # ego_lane = self.dynamic_map.mmap.lanes[0]
 
         target_speed = self.longitudinal_model_instance.longitudinal_speed(target_index,traffic_light = True)

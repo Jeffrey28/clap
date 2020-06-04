@@ -9,7 +9,7 @@ from zzz_cognition_msgs.msg import MapState
 from zzz_driver_msgs.utils import get_speed
 from carla import Location, Rotation, Transform
 from zzz_common.geometry import dense_polyline2d
-from zzz_common.kinematics import get_frenet_state, get_frenet_state_boundary_point
+from zzz_common.kinematics import get_frenet_state
 
 from zzz_planning_msgs.msg import DecisionTrajectory
 from zzz_planning_decision_continuous_models.VEG.Werling_planner_RL import Werling
@@ -81,10 +81,7 @@ class VEG_Planner(object):
                 leave_current_mmap = 1
 
             collision = False
-            sent_RL_msg = []
-            for i in range(600):
-                # ego and obs state
-                sent_RL_msg.append(0)
+            sent_RL_msg = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] # ego and obs state
             sent_RL_msg.append(collision)
             sent_RL_msg.append(leave_current_mmap)
             sent_RL_msg.append(THRESHOLD) # threshold
@@ -99,16 +96,13 @@ class VEG_Planner(object):
             self._has_clear_buff = True
         return None
 
-    def trajectory_update(self, dynamic_map, dynamic_boundary):
+    def trajectory_update(self, dynamic_map):
         if self.initialize(dynamic_map):
             self._has_clear_buff = False
             self._dynamic_map = dynamic_map
-            self._dynamic_boundary = dynamic_boundary
 
             # wrap states
-            # sent_RL_msg = self.wrap_state()
-            sent_RL_msg = self.wrap_state_dynamic_boundary()
-            rospy.loginfo("wrapped state by dunamic boundary, state length %d", len(sent_RL_msg))
+            sent_RL_msg = self.wrap_state()
             
             # rule-based planner
             rule_trajectory_msg = self._rule_based_trajectory_model_instance.trajectory_update(dynamic_map)
@@ -117,7 +111,6 @@ class VEG_Planner(object):
             sent_RL_msg.append(RLpoint.location.y)
             print("-----------------------------",sent_RL_msg)
             self.sock.sendall(msgpack.packb(sent_RL_msg))
-            rospy.loginfo("sent RL msg succeeded!!!\n\n\n")
 
             # received RL action and plan a RL trajectory
             try:
@@ -161,51 +154,6 @@ class VEG_Planner(object):
             else:
                 break
         
-        # if collision
-        collision = int(self._collision_signal)
-        self._collision_signal = False
-        state.append(collision)
-
-        # if finish
-        leave_current_mmap = 0
-        state.append(leave_current_mmap)
-        state.append(THRESHOLD)
-
-        return state
-
-    def wrap_state_dynamic_boundary(self):
-        # ego state: ego_x(0), ego_y(1), ego_vx(2), ego_vy(3)    
-        # boundary points: s d vs vd omega flag
-        state = [0, 0, 0, 0, 0, 0]
-
-        # ego state
-        ego_ffstate = get_frenet_state(self._dynamic_map.ego_state, self.ref_path, self.ref_path_tangets)
-        state[0] = ego_ffstate.s
-        state[1] = -ego_ffstate.d
-        state[2] = ego_ffstate.vs
-        state[3] = ego_ffstate.vd
-        state[4] = 0
-        state[5] = 0
-
-        for i in range(99):
-            #TODO: check the max boundary list length
-            if i >= len(self._dynamic_boundary.boundary):
-                for j in range(6):
-                    state.append(0)
-            else:
-                point_ffstate = get_frenet_state_boundary_point(self._dynamic_boundary.boundary[i], self.ref_path, self.ref_path_tangets)
-                s = point_ffstate.s
-                d = point_ffstate.d
-                vs = point_ffstate.vs
-                vd = point_ffstate.vd
-
-                state.append(s)
-                state.append(d)
-                state.append(vs)
-                state.append(vd)
-                state.append(self._dynamic_boundary.boundary[i].omega)
-                state.append(self._dynamic_boundary.boundary[i].flag)
-
         # if collision
         collision = int(self._collision_signal)
         self._collision_signal = False
