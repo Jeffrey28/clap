@@ -30,7 +30,7 @@ class MainDecision(object):
         self._dynamic_map_buffer = dynamic_map
 
     # update running in main node thread loop
-    def update(self):
+    def update(self, ref_stop_thres = 15):
         '''
         This function generate trajectory
         '''
@@ -61,6 +61,11 @@ class MainDecision(object):
         msg = DecisionTrajectory()
         msg.trajectory = self.convert_ndarray_to_pathmsg(trajectory) # TODO: move to library
         msg.desired_speed = desired_speed
+
+        rospy.loginfo("reference path length: %d", len(dynamic_map.jmap.reference_path.map_lane.central_path_points))
+        #if len(dynamic_map.jmap.reference_path.map_lane.central_path_points) < ref_stop_thres:
+        #    print "near destination, so set desired speed to 0!"
+        #    msg.desired_speed = 0
 
         return msg
 

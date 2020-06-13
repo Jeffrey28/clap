@@ -7,9 +7,9 @@ from stable_baselines.td3.policies import MlpPolicy
 from stable_baselines.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines import TD3
 
-log_path="/home/carla/ZZZ/data/veg/log/td3_0518"
-load_path="/home/carla/ZZZ/data/veg/models/td3_0518"
-save_path="/home/carla/ZZZ/data/veg/models/td3_0518"
+log_path="/home/carla/ZZZ/data/veg/log/td3_0421"
+load_path="/home/carla/ZZZ/data/veg/models/td3_0421"
+save_path="/home/carla/ZZZ/data/veg/models/td3_0421"
 
 
 
@@ -30,7 +30,7 @@ except:
                 full_tensorboard_log=True, save_path=save_path)
     print("build new model")
 
-model.learn(total_timesteps=0, log_interval=10)
+#model.learn(total_timesteps=0, log_interval=10)
 model.save(save_path)
 
 del model # remove to demonstrate saving and loading

@@ -66,7 +66,7 @@ class PathBuffer:
 
     def update(self, required_reference_path_length = 10, 
                 front_vehicle_avoidance_require_thres = 2,
-                remained_passed_point = 5):
+                remained_passed_point = 5, ref_stop_thres = 10):
         """
         Delete the passed point and add more point to the reference path
         """
@@ -139,6 +139,11 @@ class PathBuffer:
 
         # TODO: read or detect speed limit
         dynamic_map.jmap.reference_path.map_lane.speed_limit = 10
+        rospy.loginfo("reference path length: %d", len(tstates.dynamic_map.jmap.reference_path.map_lane.central_path_points))
+        if len(tstates.dynamic_map.jmap.reference_path.map_lane.central_path_points) < ref_stop_thres:
+            rospy.loginfo("near destination, so change to jmap!")
+            dynamic_map.model = 0
+
         return dynamic_map
 
     def lane_change_smoothen(self, wp):

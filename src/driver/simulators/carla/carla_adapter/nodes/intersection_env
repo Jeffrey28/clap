@@ -242,10 +242,10 @@ def removed_stopped_vehicle(carla_world, stopped_time_thres = 20):
         # if vehicle.is_alive() is False:
         #     continue
         
-        x_max = 80
-        x_min = -90
-        y_max = 40
-        y_min = -125
+        x_max = 8000
+        x_min = -9000
+        y_max = 4000
+        y_min = -12500
 
         v_loc = vehicle.get_location()
         if (v_loc.x > x_max) or (v_loc.x < x_min) or (v_loc.y > y_max) or (v_loc.y < y_min):
@@ -438,10 +438,10 @@ def adjust_ref_path(ego_x, ego_y):
 
 def ego_vehicle_outside_world(ego_x, ego_y):
 
-    x_max = 80
-    x_min = -90
-    y_max = 40
-    y_min = -125
+    x_max = 8000
+    x_min = -9000
+    y_max = 4000
+    y_min = -12500
 
     if (ego_x-x_max)*(ego_x-x_min)<0 and (ego_y-y_max)*(ego_y-y_min)<0:
         return False

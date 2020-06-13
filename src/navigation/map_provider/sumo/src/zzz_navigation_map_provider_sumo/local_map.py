@@ -175,7 +175,7 @@ class LocalMap(object):
             new_edge = closestLane.getEdge()
             new_edge.id = new_edge.getID()
             rospy.loginfo("Found ego vehicle neighbor edge id = %s",new_edge.id)
-            if self._current_edge_id is None or new_edge.id != self._current_edge_id or (abs(map_x + 10) < 1 and abs(map_y - 96) < 1):
+            if self._current_edge_id is None or new_edge.id != self._current_edge_id or (abs(map_x + 30) < 1 and abs(map_y + 2) < 1):
                 #TODO: check when change map!!
                 #jxy0518: in RL, when bump in the first section, the vehicle will go back to the start point without edge id changing.
                 rospy.loginfo("Should update static map, edge id %s -> %s", self._current_edge_id, new_edge.id)
@@ -434,8 +434,8 @@ class LocalMap(object):
 
             count = count + 1
 
-            if (flag_straight == 0 and count % 3 == 1) or count % 10 == 1 or count == len(lane.getShape()):
-            #if (0):
+            #if (flag_straight == 0 and count % 3 == 1) or count % 10 == 1 or count == len(lane.getShape()):
+            if (0):
                 # too slow... cost about 7s, so divide by 10, but distance becomes 10 times (5m). If direction changes, reduce the gap.
                 # we start to know the direction at point 2. TODO: actually the direction at point 1 can be gained by considering the next point.
 
