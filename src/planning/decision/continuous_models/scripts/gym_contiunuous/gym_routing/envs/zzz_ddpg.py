@@ -79,13 +79,16 @@ class ZZZCarlaEnv(gym.Env):
         self.seed()
 
 
-    def step(self, action, q_value, rule_action, rule_q):
+    def step(self, action, q_value, rule_action, rule_q, kill_threshold = 5):
 
         # send action to zzz planning module
         
         action = action.astype(float)
         action = action.tolist()
         print("-------------",type(action),action)
+        no_state_time = time.time()
+        no_state_start_time = time.time()
+        no_state_flag = 0
         while True:
             try:
                 send_action = action
@@ -104,12 +107,16 @@ class ZZZCarlaEnv(gym.Env):
                 RLpointy = received_msg[604]
                 self.rule_based_action = [(RLpointx, RLpointy)]
 
-                # calculate reward
+                # calculate reward:
+                # reward 1: originally means difference to rule-based action. This would finally train RL to the rule based decision.
                 reward = 50 - (abs(action[0] - RLpointx) + abs(action[1] - (RLpointy))) #+ 0.5 * ego_s
+                #TODO: change reward. Now test the state change
+                #reward = 
               
                 # judge if finish
                 done = False
 
+                # reward 2: final status: collision, success or restart
                 if collision:
                     done = True
                     reward = -1500#-1000
@@ -118,19 +125,27 @@ class ZZZCarlaEnv(gym.Env):
                 if leave_current_mmap == 1:
                     done = True
                     reward = 500#+500
-                    print("+++++++++++++++++++++ successful pass intersection")
+                    print("+++++++++++++++++++++ successfully pass current unit")
 
                 elif leave_current_mmap == 2:
                     done = True
                     print("+++++++++++++++++++++ restart by code")
                 
                 # self.record_rl_intxt(action, q_value, RLpointx, RLpointy, rule_q, collision, leave_current_mmap, ego_s, threshold)
+                no_state_flag = 0
+                no_state_start_time = time.time()
                 return np.array(self.state), reward, done,  {}, np.array(self.rule_based_action)
 
             except:
-                print("RL cannot receive an state")
-
-                continue
+                #print("RL cannot receive an state")
+                no_state_time = time.time()
+                if no_state_flag == 0:
+                    no_state_start_time = time.time()
+                    no_state_flag = 1
+                else:
+                    if no_state_time - no_state_start_time > kill_threshold:
+                        print("break because RL have not been able to receive an state for 5s")
+                        break
             
     def record_rl_intxt(self, action, q_value, RLpointx, RLpointy, rule_q, collision, leave_current_mmap, ego_s, threshold):
         fw = open("/home/carla/openai_baselines_update/zwt_ddpg/test_data/record_rl.txt", 'a')   

@@ -7,6 +7,7 @@ import numpy as np
 
 from zzz_cognition_msgs.msg import MapState
 from zzz_driver_msgs.utils import get_speed
+from zzz_driver_msgs.msg import RigidBodyState
 from carla import Location, Rotation, Transform
 from zzz_common.geometry import dense_polyline2d
 from zzz_common.kinematics import get_frenet_state, get_frenet_state_boundary_point
@@ -40,6 +41,7 @@ class VEG_Planner(object):
         self.reference_path = None
         self.ref_path = None
         self.ref_path_tangets = None
+        self.trajectory_point_buffer = None
 
         self.rivz_element = rviz_display()
         self.kick_in_signal = None
@@ -115,6 +117,30 @@ class VEG_Planner(object):
             RLpoint = self.get_RL_point_from_trajectory(self._rule_based_trajectory_model_instance.last_trajectory_rule)
             sent_RL_msg.append(RLpoint.location.x)
             sent_RL_msg.append(RLpoint.location.y)
+
+            # trajectory buffer
+            
+            if self.trajectory_point_buffer is not None:
+                rospy.loginfo("trajectory point buffer length: %d", len(self.trajectory_point_buffer))
+                #TODO: temp max trajectory length max
+                for i in range(15):
+                    if i < len(self.trajectory_point_buffer):
+                        x = self.trajectory_point_buffer[i].pose.position.x
+                        y = self.trajectory_point_buffer[i].pose.position.y
+                        fake_state = RigidBodyState()
+                        fake_state.pose.pose.position.x = x
+                        fake_state.pose.pose.position.y = y
+                        trajectory_point_ffstate = get_frenet_state(fake_state, self.ref_path, self.ref_path_tangets)
+                        sent_RL_msg.append(trajectory_point_ffstate.s)
+                        sent_RL_msg.append(trajectory_point_ffstate.d)
+                    else:
+                        sent_RL_msg.append(0)
+                        sent_RL_msg.append(0)
+            else:
+                for i in range(15):
+                    sent_RL_msg.append(0)
+                    sent_RL_msg.append(0)
+
             print("-----------------------------",sent_RL_msg)
             self.sock.sendall(msgpack.packb(sent_RL_msg))
             rospy.loginfo("sent RL msg succeeded!!!\n\n\n")
@@ -270,7 +296,9 @@ class VEG_Planner(object):
             rl_action[1] = rl_action[1] + ACTION_SPACE_SYMMERTY
             self.kick_in_signal = self.rivz_element.draw_kick_in_circles(self._dynamic_map.ego_state.pose.pose.position.x,
                         self._dynamic_map.ego_state.pose.pose.position.y, 3.5)
-            return self._rule_based_trajectory_model_instance.trajectory_update_RL_kick(self._dynamic_map, rl_action)
+            trajectory_buffer = self._rule_based_trajectory_model_instance.trajectory_update_RL_kick(self._dynamic_map, rl_action)
+            self.trajectory_point_buffer = trajectory_buffer.trajectory.poses
+            return trajectory_buffer
                                
         else:
             self.kick_in_signal = None

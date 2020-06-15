@@ -5,4 +5,4 @@ float32 y
 float32 vx
 float32 vy
 float32 omega
-uint8 flag
+float32 flag

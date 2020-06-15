@@ -383,10 +383,15 @@ def next_lane_section_points_generation(starts, ends, startvx, startvy, endvx, e
                 v_value = smallvx * math.cos(direction) + smallvy * math.sin(direction)
                 vx_s = v_value * math.cos(direction)
                 vy_s = v_value * math.sin(direction)
+                flag = 0
+                if v_value > 0.1:
+                    flag = 2
+                else:
+                    flag = 1
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (smalls - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (smalls - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy, vx_s, vy_s, 0, 2]
+                point = [pointx, pointy, vx_s, vy_s, 0, flag]
                 pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s > smalls and lane_boundaries[j].boundary_point.s < bigs:
             point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0, 0, 1]
@@ -404,11 +409,16 @@ def next_lane_section_points_generation(starts, ends, startvx, startvy, endvx, e
                 v_value = bigvx * math.cos(direction) + bigvy * math.sin(direction)
                 vx_s = v_value * math.cos(direction)
                 vy_s = v_value * math.sin(direction)
+                flag = 0
+                if v_value > 0.1:
+                    flag = 2
+                else:
+                    flag = 1
                 #the angular velocity in lanes need not be considered, so omega = 0
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy, vx_s, vy_s, 0, 2]
+                point = [pointx, pointy, vx_s, vy_s, 0, flag]
                 pointlist.append(point)
 
     if starts <= ends:
@@ -772,6 +782,11 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
                 v_value = smallvx * math.cos(direction) + smallvy * math.sin(direction)
                 vx_s = v_value * math.cos(direction)
                 vy_s = v_value * math.sin(direction)
+                flag = 0
+                if v_value > 0.1:
+                    flag = 2
+                else:
+                    flag = 1
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (smalls - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (smalls - point1.s) / (point2.s - point1.s)
@@ -793,11 +808,16 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
                 v_value = bigvx * math.cos(direction) + bigvy * math.sin(direction)
                 vx_s = v_value * math.cos(direction)
                 vy_s = v_value * math.sin(direction)
+                flag = 0
+                if v_value > 0.1:
+                    flag = 2
+                else:
+                    flag = 1
                 #the angular velocity in lanes need not be considered, so omega = 0
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy, vx_s, vy_s, 0, 2]
+                point = [pointx, pointy, vx_s, vy_s, 0, flag]
                 pointlist.append(point)
 
     if starts <= ends:

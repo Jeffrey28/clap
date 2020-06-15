@@ -141,10 +141,12 @@ class DrivingSpaceConstructor:
             boundary_point.flag = drivable_area_point[5]
             self.dynamic_boundary.boundary.append(boundary_point)
 
+        #TODO: move to drivable area to only keep the lane sections inside the drivable area
+
         #jxy0510: extend the dynamic boundary by lanes
-        '''
         if not (tstates.static_map.in_junction):
-            for lane in tstates.static_map.lanes:
+            for i in range(len(tstates.static_map.lanes)):
+                lane = tstates.static_map.lanes[i]
                 if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
                     #the left most lane boundary line cannot be broken, or else it won't be the left most lane
                     if lane.right_boundaries[0].boundary_type == 1:
@@ -155,10 +157,37 @@ class DrivingSpaceConstructor:
                             lane_point.vx = 0
                             lane_point.vy = 0
                             lane_point.omega = 0
-                            lane_point.flag = 3
-                            self.dynamic_boundary.boundary.append(lane_point
-                            '''
-        
+                            lane_point.flag = 3 + 0.1*i #mark the lane id in flag
+                            self.dynamic_boundary.boundary.append(lane_point)
+
+        #jxy0615: further extend by the next boundary and the next lanes points
+        for i in range(len(tstates.next_drivable_area)):
+            drivable_area_point = tstates.next_drivable_area[i]
+            boundary_point = DynamicBoundaryPoint()
+            boundary_point.x = drivable_area_point[0]
+            boundary_point.y = drivable_area_point[1]
+            boundary_point.vx = drivable_area_point[2]
+            boundary_point.vy = drivable_area_point[3]
+            boundary_point.omega = drivable_area_point[4]
+            boundary_point.flag = drivable_area_point[5] + 10 #add 10 to mark that it is the next drivable area
+            self.dynamic_boundary.boundary.append(boundary_point)
+
+        if (tstates.static_map.in_junction):
+            for i in range(len(tstates.static_map.next_lanes)):
+                lane = tstates.static_map.next_lanes[i]
+                if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
+                    #the left most lane boundary line cannot be broken, or else it won't be the left most lane
+                    if lane.right_boundaries[0].boundary_type == 1:
+                        for lb in lane.right_boundaries:
+                            lane_point = DynamicBoundaryPoint()
+                            lane_point.x = lb.boundary_point.position.x
+                            lane_point.y = lb.boundary_point.position.y
+                            lane_point.vx = 0
+                            lane_point.vy = 0
+                            lane_point.omega = 0
+                            lane_point.flag = 3 + 0.1*i + 10 #mark the lane id in flag
+                            self.dynamic_boundary.boundary.append(lane_point)
+
         rospy.loginfo("---------------------dynamic boundary updated!")
 
         #visualization
@@ -530,7 +559,7 @@ class DrivingSpaceConstructor:
                 tempmarker.color.g = 0.0
                 tempmarker.color.b = 1.0
                 tempmarker.color.a = 1.0
-                tempmarker.lifetime = rospy.Duration(0.1)
+                tempmarker.lifetime = rospy.Duration(0.5)
 
                 #the velocity of i is the section velocity between point i and point i+1
                 startpoint = Point()
@@ -578,6 +607,49 @@ class DrivingSpaceConstructor:
                 tempmarker.points.append(p)
             self._next_drivable_area_markerarray.markers.append(tempmarker)
             count = count + 1
+
+            #stress the dynamic parts
+            for i in range(len(tstates.next_drivable_area)):
+                point = tstates.next_drivable_area[i]
+                if abs(point[2]) < 0.1 and abs(point[3]) < 0.1:
+                    continue
+
+                if i != len(tstates.next_drivable_area) - 1:
+                    next_point = tstates.next_drivable_area[i+1]
+                else:
+                    # this is actually tstates.next_drivable_area[0] for closing the figure
+                    continue
+
+                tempmarker = Marker() #jxy: must be put inside since it is python
+                tempmarker.header.frame_id = "map"
+                tempmarker.header.stamp = rospy.Time.now()
+                tempmarker.ns = "zzz/cognition"
+                tempmarker.id = count
+                tempmarker.type = Marker.ARROW
+                tempmarker.action = Marker.ADD
+                tempmarker.scale.x = 0.40
+                tempmarker.scale.y = 0.75
+                tempmarker.scale.z = 0.75
+                tempmarker.color.r = 0.0
+                tempmarker.color.g = 0.0
+                tempmarker.color.b = 1.0
+                tempmarker.color.a = 1.0
+                tempmarker.lifetime = rospy.Duration(0.5)
+
+                #the velocity of i is the section velocity between point i and point i+1
+                startpoint = Point()
+                endpoint = Point()
+                startpoint.x = (point[0] + next_point[0])/2.0
+                startpoint.y = (point[1] + next_point[1])/2.0
+                startpoint.z = 0.0
+                endpoint.x = (point[0] + next_point[0])/2.0 + point[2]
+                endpoint.y = (point[1] + next_point[1])/2.0 + point[3]
+                endpoint.z = 0.0
+                tempmarker.points.append(startpoint)
+                tempmarker.points.append(endpoint)
+
+                self._next_drivable_area_markerarray.markers.append(tempmarker)
+                count = count + 1
 
         #8. next lanes
         self._next_lanes_markerarray = MarkerArray()
