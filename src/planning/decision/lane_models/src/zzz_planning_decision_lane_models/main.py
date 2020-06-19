@@ -40,11 +40,12 @@ class MainDecision(object):
         else:
             dynamic_map = self._dynamic_map_buffer
 
-        # if dynamic_map.model == dynamic_map.MODEL_JUNCTION_MAP:
-        #     return None
+        if dynamic_map.model == dynamic_map.MODEL_JUNCTION_MAP: #jxy0619: why is it closed before?
+            return None
         
         trajectory = None
         changing_lane_index, desired_speed = self._lateral_model_instance.lateral_decision(dynamic_map)
+        rospy.loginfo("changing lane index: %d", changing_lane_index)
         if desired_speed < 0: # TODO: clean this
             desired_speed = 0
 

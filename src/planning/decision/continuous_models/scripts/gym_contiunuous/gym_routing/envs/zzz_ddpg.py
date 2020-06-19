@@ -75,6 +75,7 @@ class ZZZCarlaEnv(gym.Env):
         no_state_flag = 0
         while True:
             try:
+                print("I'm here!")
                 send_action = action
                 send_action.append(q_value)
                 send_action.append(rule_q)                

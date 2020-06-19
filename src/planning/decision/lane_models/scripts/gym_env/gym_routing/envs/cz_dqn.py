@@ -82,7 +82,7 @@ class ZZZCarlaEnv_lane(gym.Env):
                 # wait next state
                 received_msg = msgpack.unpackb(self.sock_conn.recv(self.sock_buffer))
                 print("-------------received msg in step")
-                self.state = received_msg[0:19]
+                self.state = received_msg[0:20]
                 collision = received_msg[20]
 
                 # calculate reward
@@ -123,9 +123,10 @@ class ZZZCarlaEnv_lane(gym.Env):
 
                 self.sock_conn.sendall(msgpack.packb(action))
                 received_msg = msgpack.unpackb(self.sock_conn.recv(self.sock_buffer))
+                print("+++")
                 print("-------------received msg in reset",received_msg)
 
-                self.state = received_msg[0:19]
+                self.state = received_msg[0:20]
                 collision = received_msg[20]
                 return np.array(self.state)
 

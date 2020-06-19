@@ -82,7 +82,7 @@ class RLSDecision(object):
         try:
             self.sock.sendall(msgpack.packb(sent_RL_msg))
             RLS_action = msgpack.unpackb(self.sock.recv(self._buffer_size))
-            RLS_action = RLS_action
+            RLS_action = RLS_action[0] #jxy: originally wrong!
             print("received action:", RLS_action)
             return self.get_decision_from_discrete_action(RLS_action)
         except:
