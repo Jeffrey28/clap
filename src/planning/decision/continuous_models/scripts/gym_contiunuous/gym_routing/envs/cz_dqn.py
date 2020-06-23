@@ -91,6 +91,14 @@ class ZZZCarlaEnv_lane(gym.Env):
 
                 # calculate reward
                 reward = 0
+
+                # jxy: add speed punish, if the vehicle always stay still, it will never cause a collision.
+                if received_msg[2] < 1:
+                    reward += -50
+
+                if action[0] == 0 or action[0] == 4 or action[0] == 5:
+                    #encourage those who let the vehicle go forward
+                    reward += 10
                 
                 # judge if finish
                 done = False
@@ -101,8 +109,10 @@ class ZZZCarlaEnv_lane(gym.Env):
                     self.collision_times += 1
                     print("total_collision:",self.collision_times)
                     collision_happen = True
-                    reward = -1
+                    reward = -1500
                     done = True
+                
+                print("reward: ", reward)
 
                 steps = self.steps
                 self.steps = steps + 1

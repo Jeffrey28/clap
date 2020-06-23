@@ -428,6 +428,7 @@ class TD3(OffPolicyRLModel):
                     infos_values = []
                 # zwt
                 save_count = save_count + 1
+                print("current step: ", save_count)
                 if save_count > 100:
                     try:
                         self.save(self.save_path)

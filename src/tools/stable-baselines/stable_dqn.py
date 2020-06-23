@@ -21,14 +21,17 @@ except:
     model = DQN(MlpPolicy, env=zzz_env) #, verbose=1
     print("build new model")
 
+print("start to learn")
 model.learn(total_timesteps=1000000)
+print("learning")
 model.save(save_path)
+print("writing to ", save_path)
 
 del model # remove to demonstrate saving and loading
 
 
 print("load model to test")
-model = DQN.load("cz_deepq_0318")
+model = DQN.load(load_path)
 
 obs = zzz_env.reset()
 

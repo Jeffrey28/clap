@@ -63,6 +63,8 @@ class MainDecision(object):
         msg.trajectory = self.convert_ndarray_to_pathmsg(trajectory) # TODO: move to library
         msg.desired_speed = desired_speed
 
+        rospy.loginfo("msg.desired_speed = %f", msg.desired_speed)
+
         rospy.loginfo("reference path length: %d", len(dynamic_map.jmap.reference_path.map_lane.central_path_points))
         #if len(dynamic_map.jmap.reference_path.map_lane.central_path_points) < ref_stop_thres:
         #    print "near destination, so set desired speed to 0!"
