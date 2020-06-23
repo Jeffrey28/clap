@@ -2,7 +2,7 @@
 
 import rospy
 from zzz_common.params import parse_private_args
-from zzz_cognition_msgs.msg import MapState
+from zzz_cognition_msgs.msg import MapState, DynamicBoundary, DynamicBoundaryPoint
 
 from zzz_planning_decision_continuous_models.VEG_ITSC.VEG_planner import VEG_Planner_ITSC
 from zzz_planning_decision_continuous_models.VEG.VEG_planner import VEG_Planner
@@ -20,6 +20,7 @@ class RLSNode(object):
         params = parse_private_args(
             decision_trajectory_topic="decision_trajectory",
             dynamic_map_topic="/zzz/cognition/local_dynamic_map/map_with_ref",
+            dynamic_boundary_topic="/zzz/cognition/dynamic_boundary",
             collision_topic="/carla/ego_vehicle/collision",
             RVIZ_decision_trajectory_topic="decision_trajectory_path", 
             RVIZ_all_trajectory_topic="all_trajectory_path", 
@@ -37,6 +38,7 @@ class RLSNode(object):
         self._decision_trajectory_publisher = rospy.Publisher(params.decision_trajectory_topic, DecisionTrajectory, queue_size=1)
         self._collision_subscriber = rospy.Subscriber("/carla/ego_vehicle/collision", CarlaCollisionEvent, self.collision_callback)
         self._dynamic_map_subscriber = rospy.Subscriber(params.dynamic_map_topic, MapState, self._decision_instance.receive_dynamic_map)
+        self._dynamic_boundary_subscriber = rospy.Subscriber(params.dynamic_boundary_topic, DynamicBoundary, self._decision_instance.receive_dynamic_boundary)
 
         self._rviz_decision_trajectory_publisher = rospy.Publisher(params.RVIZ_decision_trajectory_topic, Path, queue_size=1)
         self._rviz_all_trajectory_publisher = rospy.Publisher(params.RVIZ_all_trajectory_topic, MarkerArray, queue_size=1)
@@ -47,13 +49,17 @@ class RLSNode(object):
 
     def loop(self):
         while not rospy.is_shutdown():
+            rospy.loginfo("rls train started\n")
             publish_msg = self._decision_instance.update_trajectory()
             if publish_msg:
+                rospy.loginfo("Succeeded to publish the trajectory!!!\n\n\n\n")
                 self._decision_trajectory_publisher.publish(publish_msg)
                 publish_msg2 = publish_msg.trajectory
                 self._rviz_decision_trajectory_publisher.publish(publish_msg2)
                 rospy.logdebug("PUBLISH: trajectory length = %d, desired_speed = %f", 
                     len(publish_msg.trajectory.poses), publish_msg.desired_speed)
+            else:
+                rospy.loginfo("Failed to publish the trajectory!!!\n\n\n\n")
             try:
                 self.pub_rviz()
             except:

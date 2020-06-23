@@ -322,7 +322,7 @@ class TD3(OffPolicyRLModel):
                     # compatibility with callbacks that have no return statement.
                     if callback(locals(), globals()) is False:
                         break
-                print("-----222",obs)
+                #print("-----222",obs)
 
                 # Before training starts, randomly sample actions
                 # from a uniform distribution for better exploration.
@@ -391,7 +391,7 @@ class TD3(OffPolicyRLModel):
                         self.action_noise.reset()
                     if not isinstance(self.env, VecEnv):
                         obs, rule_action = self.env.reset()
-                        print("-----111",obs)
+                        #print("-----111",obs)
                     episode_rewards.append(0.0)
 
                     maybe_is_success = info.get('is_success')
