@@ -54,38 +54,16 @@ class ZZZCarlaEnv(gym.Env):
         high_action = np.array([2.0, 15/3.6])  #Should be symmetry for DDPG
         self.action_space = spaces.Box(low=low_action, high=high_action, dtype=np.float32)
 
-        self.state_dimention = 600
-
-        low  = np.zeros(600)
-        high = np.zeros(600)   
-
-        for i in range(100):
-            # s d vs vd omega flag
-            low[i*6] = -100
-            low[i*6+1] = -100
-            low[i*6+2] = -15
-            low[i*6+3] = -7
-            low[i*6+4] = -5
-            low[i*6+5] = 0
-            
-            high[i*6] = 100
-            high[i*6+1] = 100
-            high[i*6+2] = 15
-            high[i*6+3] = 7
-            high[i*6+4] = 5
-            high[i*6+5] = 20
-
-        
-        '''self.state_dimention = 16
+        self.state_dimention = 16
 
         low  = np.array([-100,  -100,   -20,  -20,  -100, -100,  -20,   -20,   -100, -100,   -20,  -20, -100,  -100, -20, -20])
-        high = np.array([100, 100, 20, 20, 100, 100, 20, 20, 100, 100, 20, 20,100, 100, 20, 20])'''
+        high = np.array([100, 100, 20, 20, 100, 100, 20, 20, 100, 100, 20, 20,100, 100, 20, 20])    
 
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
         self.seed()
 
 
-    def step(self, action, q_value, rule_action, rule_q, kill_threshold = 10):
+    def step(self, action, q_value, rule_action, rule_q, kill_threshold = 5):
 
         # send action to zzz planning module
         
@@ -97,70 +75,56 @@ class ZZZCarlaEnv(gym.Env):
         no_state_flag = 0
         while True:
             try:
+                print("I'm here!")
                 send_action = action
                 send_action.append(q_value)
                 send_action.append(rule_q)                
-
                 self.sock_conn.sendall(msgpack.packb(send_action))
 
                 # wait next state
-                print("-------------try receiving msg in step")
                 received_msg = msgpack.unpackb(self.sock_conn.recv(self.sock_buffer))
                 print("-------------received msg in step")
-                print("msg length: ", len(received_msg))
-
-                
-                self.state = received_msg[0:600]
-                collision = received_msg[600]
-                leave_current_mmap = received_msg[601]
-                threshold = received_msg[602]
-                RLpointx = received_msg[603]
-                RLpointy = received_msg[604]
-                self.rule_based_action = [(RLpointx, RLpointy)]
-
-                '''self.state = received_msg[0:16]
+                self.state = received_msg[0:16]
                 collision = received_msg[16]
                 leave_current_mmap = received_msg[17]
                 threshold = received_msg[18]
                 RLpointx = received_msg[19]
                 RLpointy = received_msg[20]
-                self.rule_based_action = [(RLpointx, RLpointy)]'''
+                self.rule_based_action = [(RLpointx, RLpointy)]
 
-                # calculate reward:
-                # Originally means difference to rule-based action. This would finally train RL to the rule based decision.
-                reward = 50 - (abs(action[0] - RLpointx) + abs(action[1] - (RLpointy))) #+ 0.5 * ego_s
-                #TODO: change reward. Now test the state change
-                #reward = 0
+                # calculate reward
+                reward = 5 - (abs(action[0] - RLpointx) + abs(action[1] - RLpointy)) + 0.5 * received_msg[0]
               
                 # judge if finish
                 done = False
 
-                # reward 3: final status: collision, success or restart
                 if collision:
                     done = True
-                    reward = -1500#-1000
+                    #reward = 0#-1000
                     print("+++++++++++++++++++++ received collision")
                 
-                #TODO: check it
                 if leave_current_mmap == 1:
                     done = True
                     reward = 500#+500
-                    print("+++++++++++++++++++++ successfully pass current unit")
+                    print("+++++++++++++++++++++ successful pass intersection")
 
                 elif leave_current_mmap == 2:
                     done = True
                     print("+++++++++++++++++++++ restart by code")
-
                 reward = reward / 500
                 print("reward=", reward)
-                
-                # self.record_rl_intxt(action, q_value, RLpointx, RLpointy, rule_q, collision, leave_current_mmap, ego_s, threshold)
+
+                if q_value - rule_q > threshold:
+                    print("kick in!！！!！!！!！!！!！!")
+
                 no_state_flag = 0
                 no_state_start_time = time.time()
+                
+                # self.record_rl_intxt(action, q_value, RLpointx, RLpointy, rule_q, collision, leave_current_mmap, ego_s, threshold)
                 return np.array(self.state), reward, done,  {}, np.array(self.rule_based_action)
 
             except:
-                #print("RL cannot receive an state")
+                print("RL cannot receive an state")
                 no_state_time = time.time()
                 if no_state_flag == 0:
                     no_state_start_time = time.time()
@@ -207,24 +171,17 @@ class ZZZCarlaEnv(gym.Env):
                 print("-------------",type(action),action)
 
                 self.sock_conn.sendall(msgpack.packb(action))
-                print("-------------try receiving msg in reset")
+                print("-------------try received msg in reset")
 
                 received_msg = msgpack.unpackb(self.sock_conn.recv(self.sock_buffer))
-                print("-------------received msg in reset")
+                print("-------------received msg in reset",received_msg)
 
-                self.state = received_msg[0:600]
-                collision = received_msg[600]
-                leave_current_mmap = received_msg[601]
-                RLpointx = received_msg[603]
-                RLpointy = received_msg[604]
-                self.rule_based_action = [(RLpointx,RLpointy - 12.5/3.6)]
-
-                '''self.state = received_msg[0:16]
+                self.state = received_msg[0:16]
                 collision = received_msg[16]
                 leave_current_mmap = received_msg[17]
                 RLpointx = received_msg[18]
                 RLpointy = received_msg[19]
-                self.rule_based_action = [(RLpointx,RLpointy)]'''
+                self.rule_based_action = [(RLpointx,RLpointy)]
 
                 return np.array(self.state), np.array(self.rule_based_action)
 
@@ -234,8 +191,8 @@ class ZZZCarlaEnv(gym.Env):
                 collision = 0
                 leave_current_mmap = 0
                 RLpointx = 0
-                RLpointy = 0
-                self.rule_based_action = [(RLpointx,RLpointy - 12.5/3.6)]
+                RLpointy = 0 - 15/3.6
+                self.rule_based_action = [(RLpointx,RLpointy)]
 
                 return np.array(self.state), np.array(self.rule_based_action)
 
