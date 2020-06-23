@@ -109,6 +109,10 @@ class BaseRLModel(ABC):
             raise ValueError("Error: trying to replace the current environment with None")
 
         # sanity checking the environment
+        print(env.observation_space)
+        print(self.observation_space)
+        if self.observation_space == env.observation_space:
+            print("hahaha")
         assert self.observation_space == env.observation_space, \
             "Error: the environment passed must have at least the same observation space as the model was trained on."
         assert self.action_space == env.action_space, \

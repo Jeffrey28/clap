@@ -8,20 +8,21 @@ import sys
 from stable_baselines.deepq.policies import MlpPolicy
 from stable_baselines import DQN
 
-
+load_path = "/home/carla/ZZZ/data/veg/models/dqn_0623"
+save_path = "/home/carla/ZZZ/data/veg/models/dqn_0623"
 
 zzz_env = gym.make('zzz_lane-v0')
 
 
 try:
-    model = DQN.load("cz_deepq_0318",env=zzz_env)
+    model = DQN.load(load_path,env=zzz_env)
     print("load saved model")
 except:
     model = DQN(MlpPolicy, env=zzz_env) #, verbose=1
     print("build new model")
 
 model.learn(total_timesteps=1000000)
-model.save("cz_deepq_0318")
+model.save(save_path)
 
 del model # remove to demonstrate saving and loading
 

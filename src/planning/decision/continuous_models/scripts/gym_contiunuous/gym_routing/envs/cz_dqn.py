@@ -70,12 +70,15 @@ class ZZZCarlaEnv_lane(gym.Env):
         self.sock_conn, addr = self.sock.accept()
         print("ZZZ connected at {}".format(addr))
 
-    def step(self, action):
+    def step(self, action, kill_threshold = 5):
         action_buffer = action.astype(int)
         action = []
         action.append(int(action_buffer))
         # send action to zzz planning module
         print("-------------",type(action),action)
+        no_state_time = time.time()
+        no_state_start_time = time.time()
+        no_state_flag = 0
         while True:
             try:
                 self.sock_conn.sendall(msgpack.packb(action))
@@ -103,13 +106,22 @@ class ZZZCarlaEnv_lane(gym.Env):
 
                 steps = self.steps
                 self.steps = steps + 1
+
+                no_state_flag = 0
+                no_state_start_time = time.time()
                 
                 return np.array(self.state), reward, done, collision_happen
 
             except:
                 print("RL cannot receive an state")
-
-                continue
+                no_state_time = time.time()
+                if no_state_flag == 0:
+                    no_state_start_time = time.time()
+                    no_state_flag = 1
+                else:
+                    if no_state_time - no_state_start_time > kill_threshold:
+                        print("break because RL have not been able to receive an state for 10s")
+                        break
 
         return np.array(self.state), reward, done, collision_happen
 
