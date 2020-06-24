@@ -54,12 +54,12 @@ class ZZZCarlaEnv(gym.Env):
         high_action = np.array([2.0, 15/3.6])  #Should be symmetry for DDPG
         self.action_space = spaces.Box(low=low_action, high=high_action, dtype=np.float32)
 
-        self.state_dimention = 600
+        self.state_dimention = 300
 
-        low  = np.zeros(600)
-        high = np.zeros(600)   
+        low  = np.zeros(self.state_dimention)
+        high = np.zeros(self.state_dimention)
 
-        for i in range(100):
+        '''for i in range(100):
             # s d vs vd omega flag
             low[i*6] = -100.0
             low[i*6+1] = -100.0
@@ -73,7 +73,7 @@ class ZZZCarlaEnv(gym.Env):
             high[i*6+2] = 15.0
             high[i*6+3] = 7.0
             high[i*6+4] = 5.0
-            high[i*6+5] = 20.0
+            high[i*6+5] = 20.0'''
         
         '''self.state_dimention = 16
 
@@ -108,13 +108,14 @@ class ZZZCarlaEnv(gym.Env):
                 print("-------------received msg in step")
                 print("msg length: ", len(received_msg))
 
-                
-                self.state = received_msg[0:600]
-                collision = received_msg[600]
-                leave_current_mmap = received_msg[601]
-                threshold = received_msg[602]
-                RLpointx = received_msg[603]
-                RLpointy = received_msg[604]
+                state_dim = self.state_dimention
+
+                self.state = received_msg[0:state_dim]
+                collision = received_msg[state_dim]
+                leave_current_mmap = received_msg[state_dim+1]
+                threshold = received_msg[state_dim+2]
+                RLpointx = received_msg[state_dim+3]
+                RLpointy = received_msg[state_dim+4]
                 self.rule_based_action = [(RLpointx, RLpointy)]
 
                 '''self.state = received_msg[0:16]
@@ -211,11 +212,13 @@ class ZZZCarlaEnv(gym.Env):
                 received_msg = msgpack.unpackb(self.sock_conn.recv(self.sock_buffer))
                 print("-------------received msg in reset")
 
-                self.state = received_msg[0:600]
-                collision = received_msg[600]
-                leave_current_mmap = received_msg[601]
-                RLpointx = received_msg[603]
-                RLpointy = received_msg[604]
+                state_dim = self.state_dimention
+
+                self.state = received_msg[0:state_dim]
+                collision = received_msg[state_dim]
+                leave_current_mmap = received_msg[state_dim+1]
+                RLpointx = received_msg[state_dim+3]
+                RLpointy = received_msg[state_dim+4]
                 self.rule_based_action = [(RLpointx,RLpointy - 12.5/3.6)]
 
                 '''self.state = received_msg[0:16]

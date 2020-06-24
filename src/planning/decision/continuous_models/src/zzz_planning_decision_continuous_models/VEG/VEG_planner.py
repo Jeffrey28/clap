@@ -86,7 +86,7 @@ class VEG_Planner(object):
 
             collision = False
             sent_RL_msg = []
-            for i in range(600):
+            for i in range(300):
                 sent_RL_msg.append(0)
             sent_RL_msg.append(collision)
             sent_RL_msg.append(leave_current_mmap)
@@ -109,6 +109,7 @@ class VEG_Planner(object):
     def trajectory_update(self, dynamic_map, dynamic_boundary):
         if self.initialize(dynamic_map):
             self._has_clear_buff = False
+            
             self._dynamic_map = dynamic_map
             self._dynamic_boundary = dynamic_boundary
 
@@ -116,9 +117,9 @@ class VEG_Planner(object):
             sent_RL_msg = self.wrap_state_dynamic_boundary()
             print("length???", len(sent_RL_msg))
             print(sent_RL_msg)
-            sent_RL_msg = []
-            for i in range(603):
-                sent_RL_msg.append(8)
+            '''sent_RL_msg = []
+            for i in range(303):
+                sent_RL_msg.append(0.5)'''
             rospy.loginfo("wrapped state by dynamic boundary, state length %d", len(sent_RL_msg))
             
             # rule-based planner
@@ -202,7 +203,7 @@ class VEG_Planner(object):
         state[4] = 0
         state[5] = 0
 
-        for i in range(99):
+        for i in range(49):
             #TODO: check the max boundary list length
             if i >= len(self._dynamic_boundary.boundary):
                 for j in range(6):
@@ -222,7 +223,7 @@ class VEG_Planner(object):
                 state.append(self._dynamic_boundary.boundary[i].flag)
 
         # check low and high limit in zzz_ddpg
-        for i in range(100):
+        for i in range(50):
             state[i*6] = min(state[i*6], 100)
             state[i*6] = max(state[i*6], -100)
             state[i*6+1] = min(state[i*6+1], 100)
