@@ -61,20 +61,19 @@ class ZZZCarlaEnv(gym.Env):
 
         for i in range(100):
             # s d vs vd omega flag
-            low[i*6] = -100
-            low[i*6+1] = -100
-            low[i*6+2] = -15
-            low[i*6+3] = -7
-            low[i*6+4] = -5
-            low[i*6+5] = 0
+            low[i*6] = -100.0
+            low[i*6+1] = -100.0
+            low[i*6+2] = -15.0
+            low[i*6+3] = -7.0
+            low[i*6+4] = -5.0
+            low[i*6+5] = -1.0
             
-            high[i*6] = 100
-            high[i*6+1] = 100
-            high[i*6+2] = 15
-            high[i*6+3] = 7
-            high[i*6+4] = 5
-            high[i*6+5] = 20
-
+            high[i*6] = 100.0
+            high[i*6+1] = 100.0
+            high[i*6+2] = 15.0
+            high[i*6+3] = 7.0
+            high[i*6+4] = 5.0
+            high[i*6+5] = 20.0
         
         '''self.state_dimention = 16
 

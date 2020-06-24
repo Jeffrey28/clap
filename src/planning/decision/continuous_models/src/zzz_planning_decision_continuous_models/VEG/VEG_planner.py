@@ -115,9 +115,10 @@ class VEG_Planner(object):
             # wrap states
             sent_RL_msg = self.wrap_state_dynamic_boundary()
             print("length???", len(sent_RL_msg))
+            print(sent_RL_msg)
             sent_RL_msg = []
             for i in range(603):
-                sent_RL_msg.append(0)
+                sent_RL_msg.append(8)
             rospy.loginfo("wrapped state by dynamic boundary, state length %d", len(sent_RL_msg))
             
             # rule-based planner
@@ -219,6 +220,21 @@ class VEG_Planner(object):
                 state.append(vd)
                 state.append(self._dynamic_boundary.boundary[i].omega)
                 state.append(self._dynamic_boundary.boundary[i].flag)
+
+        # check low and high limit in zzz_ddpg
+        for i in range(100):
+            state[i*6] = min(state[i*6], 100)
+            state[i*6] = max(state[i*6], -100)
+            state[i*6+1] = min(state[i*6+1], 100)
+            state[i*6+1] = max(state[i*6+1], -100)
+            state[i*6+2] = min(state[i*6+2], 15)
+            state[i*6+2] = max(state[i*6+2], -15)
+            state[i*6+3] = min(state[i*6+3], 7)
+            state[i*6+3] = max(state[i*6+3], -7)
+            state[i*6+4] = min(state[i*6+4], 5)
+            state[i*6+4] = max(state[i*6+4], -5)
+            state[i*6+5] = min(state[i*6+5], 20)
+            state[i*6+5] = max(state[i*6+5], -1)
 
         # if collision
         collision = int(self._collision_signal)
