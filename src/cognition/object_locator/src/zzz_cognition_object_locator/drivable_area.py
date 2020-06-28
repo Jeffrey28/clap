@@ -235,20 +235,45 @@ def calculate_next_drivable_area(tstates):
         for i in range(length_ori):
             j = length_ori - 1 - i
             next_id = j + 1
-            if id_list[j] == -2:
-                # key points, should not delete
-                continue
             if j == len(angle_list)-1:
                 next_id = 0
             if j < 0:
                 break
-            if id_list[j] == id_list[j-1] and id_list[j] == id_list[next_id]:
+
+            if id_list[j] == -1:
+                # jxy0615: downsizing more accurately
+                if (id_list[j-1] == -1 or id_list[j-1] == -2) and (id_list[next_id] == -1 or id_list[next_id] == -2):
+                    del angle_list[j]
+                    del dist_list[j]
+                    del vx_list[j]
+                    del vy_list[j]
+                    del omega_list[j]
+                    del flag_list[j]
+                    continue
+            elif id_list[j] == -2:
+                # jxy0615: continue to downsize, static points too many
+                if id_list[j-1] == -2 and id_list[next_id] == -2:
+                    delta_dis_prev = abs(dist_list[j] - dist_list[j-1])
+                    delta_dis_next = abs(dist_list[j] - dist_list[next_id])
+                    delta_angle_prev = abs(angle_list[j] - angle_list[j-1])
+                    delta_angle_next = abs(angle_list[j] - angle_list[next_id])
+                    if delta_dis_prev < 0.2 and delta_dis_next < 0.2 and delta_angle_prev < 2 and delta_angle_next < 2:
+                        del angle_list[j]
+                        del dist_list[j]
+                        del vx_list[j]
+                        del vy_list[j]
+                        del omega_list[j]
+                        del flag_list[j]
+                        continue
+            
+            elif id_list[j] == id_list[j-1] and id_list[j] == id_list[next_id]:
                 del angle_list[j]
                 del dist_list[j]
                 del vx_list[j]
                 del vy_list[j]
                 del omega_list[j]
                 del flag_list[j]
+                continue
             if id_list[j] >= 0 and id_list[next_id] != id_list[j]:
                 # velocity of point i means the velocity of the edge between point i and point i+1
                 vx_list[j] = 0
@@ -643,20 +668,45 @@ def calculate_drivable_area(tstates):
         for i in range(length_ori):
             j = length_ori - 1 - i
             next_id = j + 1
-            if id_list[j] == -2:
-                # key points, should not delete
-                continue
             if j == len(angle_list)-1:
                 next_id = 0
             if j < 0:
                 break
-            if id_list[j] == id_list[j-1] and id_list[j] == id_list[next_id]:
+
+            if id_list[j] == -1:
+                # jxy0615: downsizing more accurately
+                if (id_list[j-1] == -1 or id_list[j-1] == -2) and (id_list[next_id] == -1 or id_list[next_id] == -2):
+                    del angle_list[j]
+                    del dist_list[j]
+                    del vx_list[j]
+                    del vy_list[j]
+                    del omega_list[j]
+                    del flag_list[j]
+                    continue
+            elif id_list[j] == -2:
+                # jxy0615: continue to downsize, static points too many
+                if id_list[j-1] == -2 and id_list[next_id] == -2:
+                    delta_dis_prev = abs(dist_list[j] - dist_list[j-1])
+                    delta_dis_next = abs(dist_list[j] - dist_list[next_id])
+                    delta_angle_prev = abs(angle_list[j] - angle_list[j-1])
+                    delta_angle_next = abs(angle_list[j] - angle_list[next_id])
+                    if delta_dis_prev < 0.2 and delta_dis_next < 0.2 and delta_angle_prev < 2 and delta_angle_next < 2:
+                        del angle_list[j]
+                        del dist_list[j]
+                        del vx_list[j]
+                        del vy_list[j]
+                        del omega_list[j]
+                        del flag_list[j]
+                        continue
+            
+            elif id_list[j] == id_list[j-1] and id_list[j] == id_list[next_id]:
                 del angle_list[j]
                 del dist_list[j]
                 del vx_list[j]
                 del vy_list[j]
                 del omega_list[j]
                 del flag_list[j]
+                continue
             if id_list[j] >= 0 and id_list[next_id] != id_list[j]:
                 # velocity of point i means the velocity of the edge between point i and point i+1
                 vx_list[j] = 0

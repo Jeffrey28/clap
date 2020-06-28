@@ -86,7 +86,7 @@ class VEG_Planner(object):
 
             collision = False
             sent_RL_msg = []
-            for i in range(300):
+            for i in range(480):
                 sent_RL_msg.append(0)
             sent_RL_msg.append(collision)
             sent_RL_msg.append(leave_current_mmap)
@@ -203,11 +203,17 @@ class VEG_Planner(object):
         state[4] = 0
         state[5] = 0
 
-        for i in range(49):
+        for i in range(79):
             #TODO: check the max boundary list length
             if i >= len(self._dynamic_boundary.boundary):
-                for j in range(6):
-                    state.append(0)
+                #for j in range(6):
+                #    state.append(0)
+                state.append(0.0)
+                state.append(0.0)
+                state.append(0.0)
+                state.append(0.0)
+                state.append(0.0)
+                state.append(0)
             else:
                 point_ffstate = get_frenet_state_boundary_point(self._dynamic_boundary.boundary[i], self.ref_path, self.ref_path_tangets)
                 s = point_ffstate.s
@@ -215,27 +221,15 @@ class VEG_Planner(object):
                 vs = point_ffstate.vs
                 vd = point_ffstate.vd
 
+                omega = self._dynamic_boundary.boundary[i].omega
+                flag = int(self._dynamic_boundary.boundary[i].flag*10) #socket transmit limit, must use int instead of float
+
                 state.append(s)
                 state.append(d)
                 state.append(vs)
                 state.append(vd)
-                state.append(self._dynamic_boundary.boundary[i].omega)
-                state.append(self._dynamic_boundary.boundary[i].flag)
-
-        # check low and high limit in zzz_ddpg
-        for i in range(50):
-            state[i*6] = min(state[i*6], 100)
-            state[i*6] = max(state[i*6], -100)
-            state[i*6+1] = min(state[i*6+1], 100)
-            state[i*6+1] = max(state[i*6+1], -100)
-            state[i*6+2] = min(state[i*6+2], 15)
-            state[i*6+2] = max(state[i*6+2], -15)
-            state[i*6+3] = min(state[i*6+3], 7)
-            state[i*6+3] = max(state[i*6+3], -7)
-            state[i*6+4] = min(state[i*6+4], 5)
-            state[i*6+4] = max(state[i*6+4], -5)
-            state[i*6+5] = min(state[i*6+5], 20)
-            state[i*6+5] = max(state[i*6+5], -1)
+                state.append(omega)
+                state.append(flag)
 
         # if collision
         collision = int(self._collision_signal)

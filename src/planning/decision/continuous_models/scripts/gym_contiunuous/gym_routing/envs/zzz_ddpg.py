@@ -54,12 +54,12 @@ class ZZZCarlaEnv(gym.Env):
         high_action = np.array([2.0, 15/3.6])  #Should be symmetry for DDPG
         self.action_space = spaces.Box(low=low_action, high=high_action, dtype=np.float32)
 
-        self.state_dimention = 300
+        self.state_dimention = 480
 
         low  = np.zeros(self.state_dimention)
         high = np.zeros(self.state_dimention)
 
-        '''for i in range(100):
+        for i in range(80):
             # s d vs vd omega flag
             low[i*6] = -100.0
             low[i*6+1] = -100.0
@@ -73,7 +73,7 @@ class ZZZCarlaEnv(gym.Env):
             high[i*6+2] = 15.0
             high[i*6+3] = 7.0
             high[i*6+4] = 5.0
-            high[i*6+5] = 20.0'''
+            high[i*6+5] = 20.0
         
         '''self.state_dimention = 16
 
@@ -117,14 +117,6 @@ class ZZZCarlaEnv(gym.Env):
                 RLpointx = received_msg[state_dim+3]
                 RLpointy = received_msg[state_dim+4]
                 self.rule_based_action = [(RLpointx, RLpointy)]
-
-                '''self.state = received_msg[0:16]
-                collision = received_msg[16]
-                leave_current_mmap = received_msg[17]
-                threshold = received_msg[18]
-                RLpointx = received_msg[19]
-                RLpointy = received_msg[20]
-                self.rule_based_action = [(RLpointx, RLpointy)]'''
 
                 # calculate reward:
                 # Originally means difference to rule-based action. This would finally train RL to the rule based decision.
@@ -220,13 +212,6 @@ class ZZZCarlaEnv(gym.Env):
                 RLpointx = received_msg[state_dim+3]
                 RLpointy = received_msg[state_dim+4]
                 self.rule_based_action = [(RLpointx,RLpointy - 12.5/3.6)]
-
-                '''self.state = received_msg[0:16]
-                collision = received_msg[16]
-                leave_current_mmap = received_msg[17]
-                RLpointx = received_msg[18]
-                RLpointy = received_msg[19]
-                self.rule_based_action = [(RLpointx,RLpointy)]'''
 
                 return np.array(self.state), np.array(self.rule_based_action)
 
