@@ -8,7 +8,7 @@ import numpy as np
 from zzz_cognition_msgs.msg import MapState
 from zzz_driver_msgs.utils import get_speed
 from carla import Location, Rotation, Transform
-from zzz_common.geometry import dense_polyline2d
+from zzz_common.geometry import dense_polyline2d, dist_from_point_to_closedpolyline2d
 from zzz_common.kinematics import get_frenet_state, get_frenet_state_boundary_point
 
 from zzz_planning_msgs.msg import DecisionTrajectory
@@ -41,6 +41,7 @@ class VEG_Planner(object):
         self.reference_path = None
         self.ref_path = None
         self.ref_path_tangets = None
+        self.reward_buffer = 0
 
         self.rivz_element = rviz_display()
         self.kick_in_signal = None
@@ -59,10 +60,24 @@ class VEG_Planner(object):
         
     def initialize(self, dynamic_map):
         try:
-            self.reference_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
-            ref_path_ori = convert_path_to_ndarray(self.reference_path)
-            self.ref_path = dense_polyline2d(ref_path_ori, 2)
-            self.ref_path_tangets = np.zeros(len(self.ref_path))
+            if self.reference_path is None:
+                self.reference_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
+                ref_path_ori = convert_path_to_ndarray(self.reference_path)
+                # Prolong
+                self.ref_path = dense_polyline2d(ref_path_ori, 2)
+                # the last 2 points:
+                point1 = self.ref_path[-2]
+                point2 = self.ref_path[-1]
+                direction1 = point2[0] - point1[0]
+                direction2 = point2[1] - point1[1]
+                direction_length = np.sqrt(direction1 * direction1 + direction2 * direction2)
+                direction1 = direction1 / direction_length
+                direction2 = direction2 / direction_length
+                new_x = point2[0] + direction1 * 80 #add 80m
+                new_y = point2[1] + direction2 * 80
+                new_point = np.array([new_x, new_y])
+                self.ref_path = np.row_stack((self.ref_path, new_point))
+                self.ref_path_tangets = np.zeros(len(self.ref_path))
             return True
         except:
             print("------> VEG: Initialize fail ")
@@ -72,6 +87,9 @@ class VEG_Planner(object):
         print("has clear buff?", self._has_clear_buff)
         self._rule_based_trajectory_model_instance.clear_buff(dynamic_map)
         self._collision_signal = False
+        self.reference_path = None
+        self.ref_path = None
+        self.ref_path_tangets = None
         rospy.loginfo("start to clear buff!")
         print("has clear buff?", self._has_clear_buff)
 
@@ -93,7 +111,7 @@ class VEG_Planner(object):
             sent_RL_msg.append(THRESHOLD) # threshold
             sent_RL_msg.append(0.0) # Rule_based_point.d
             sent_RL_msg.append(0.0 - ACTION_SPACE_SYMMERTY) # Rule_based_point.vs
-            #sent_RL_msg.append(self.reward_buffer)
+            sent_RL_msg.append(0)
             rospy.loginfo("sent msg length, %d", len(sent_RL_msg))
             self.sock.sendall(msgpack.packb(sent_RL_msg))
             rospy.loginfo("sent RL msg succeeded!!!\n\n\n")
@@ -127,12 +145,75 @@ class VEG_Planner(object):
             RLpoint = self.get_RL_point_from_trajectory(self._rule_based_trajectory_model_instance.last_trajectory_rule)
             sent_RL_msg.append(RLpoint.location.x)
             sent_RL_msg.append(RLpoint.location.y)
-            #sent_RL_msg.append(self.reward_buffer)
+            sent_RL_msg.append(self.reward_buffer)
 
             print("-----------------------------",sent_RL_msg)
             rospy.loginfo("sent msg length, %d", len(sent_RL_msg))
             self.sock.sendall(msgpack.packb(sent_RL_msg))
             rospy.loginfo("sent RL msg succeeded!!!\n\n\n")
+
+
+            # Prepare for calculating the reward by the planned trajectory.
+            # Decoding drivable area, next drivable area and broken lanes. From dynamic boundary.
+            
+            last_lane_num = None
+            next_last_lane_num = None
+            lane_list=[]
+            next_lane_list=[]
+            current_lane=[]
+            current_next_lane=[]
+            drivable_area_list=[]
+            next_drivable_area_list=[]
+            for i in range(80):
+                point = sent_RL_msg[(6*i):(6*i+6)]
+                if point[5]/10 < 10:
+                    if point[5]/10 == 0:
+                        continue
+                    if point[5]/10 >= 3:
+                        lane_num = int((point[5]/10-3)*10)
+                        if last_lane_num is None:
+                            #start a new lane
+                            current_lane = []
+                            current_lane.append([point[0], point[1]])
+                        elif lane_num != last_lane_num:
+                            #save the current lane and start a new lane
+                            lane_list.append(current_lane)
+                            current_lane = []
+                            current_lane.append([point[0], point[1]])
+                        else:
+                            current_lane.append([point[0], point[1]])
+                    else:
+                        position_point = [point[0], point[1]]
+                        drivable_area_list.append(position_point)
+                else:
+                    if point[5]/10 >= 13:
+                        next_lane_num = int((point[5]/10-13)*10)
+                        if next_last_lane_num is None:
+                            #start a new lane
+                            current_next_lane = []
+                            current_next_lane.append([point[0], point[1]])
+                        elif next_lane_num != next_last_lane_num:
+                            #save the current lane and start a new lane
+                            next_lane_list.append(current_next_lane)
+                            current_next_lane = []
+                            current_next_lane.append([point[0], point[1]])
+                        else:
+                            current_next_lane.append([point[0], point[1]])
+                    else:
+                        position_point = [point[0], point[1]]
+                        next_drivable_area_list.append(position_point)
+            if len(current_lane) > 0:
+                lane_list.append(current_lane)
+            if len(current_next_lane) > 0:
+                next_lane_list.append(current_next_lane)
+            
+            print("drivable area decoded, length ", len(drivable_area_list))
+            print("next_drivable_area_decoded, length ", len(next_drivable_area_list))
+            print("lanes decoded, num ", len(lane_list))
+            print("next lanes decoded, num ", len(next_lane_list))
+
+            drivable_area_array = np.array(drivable_area_list)
+            next_drivable_area_array = np.array(next_drivable_area_list)
 
             # received RL action and plan a RL trajectory
             try:
@@ -140,7 +221,32 @@ class VEG_Planner(object):
                 rl_action = [received_msg[0], received_msg[1]]
                 rl_q = received_msg[2]
                 rule_q = received_msg[3]
-                return self.generate_VEG_trajectory(rl_q, rule_q, rl_action, rule_trajectory_msg)
+                
+                VEG_trajectory = self.generate_VEG_trajectory(rl_q, rule_q, rl_action, rule_trajectory_msg)
+                trajectory_points = VEG_trajectory.trajectory.poses
+
+                # reward: if the vehicle is running out of the drivable area, punish it.
+                
+                reward = 0
+                for i in len(trajectory_points):
+                    pointx = trajectory_points[i].pose.position.x
+                    pointy = trajectory_points[i].pose.position.y
+
+                    dist1, _, _, = dist_from_point_to_closedpolyline2d(pointx, pointy, drivable_area_array)
+                    if dist1 >= 0:
+                        if len(next_drivable_area_array) > 0:
+                            dist2, _, _, = dist_from_point_to_closedpolyline2d(pointx, pointy, next_drivable_area_array)
+                            if dist2 >= 0:
+                                print("trajectory conflicts to the drivable area and next drivable area!")
+                                reward = -1000
+                        else:
+                            print("trajectory conflicts to the drivable area!")
+                            reward = -1000
+                            
+
+                self.reward_buffer = reward
+
+                return VEG_trajectory
             
             except:
                 rospy.logerr("Continous RLS Model cannot receive an action")
@@ -206,14 +312,8 @@ class VEG_Planner(object):
         for i in range(79):
             #TODO: check the max boundary list length
             if i >= len(self._dynamic_boundary.boundary):
-                #for j in range(6):
-                #    state.append(0)
-                state.append(0.0)
-                state.append(0.0)
-                state.append(0.0)
-                state.append(0.0)
-                state.append(0.0)
-                state.append(0)
+                for j in range(6):
+                    state.append(0)
             else:
                 point_ffstate = get_frenet_state_boundary_point(self._dynamic_boundary.boundary[i], self.ref_path, self.ref_path_tangets)
                 s = point_ffstate.s
@@ -296,7 +396,7 @@ class VEG_Planner(object):
             self.kick_in_signal = self.rivz_element.draw_kick_in_circles(self._dynamic_map.ego_state.pose.pose.position.x,
                         self._dynamic_map.ego_state.pose.pose.position.y, 3.5)
             return self._rule_based_trajectory_model_instance.trajectory_update_RL_kick(self._dynamic_map, rl_action)
-                               
+        
         else:
             self.kick_in_signal = None
             return rule_trajectory_msg

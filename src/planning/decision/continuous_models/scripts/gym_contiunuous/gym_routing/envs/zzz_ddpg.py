@@ -47,6 +47,7 @@ class ZZZCarlaEnv(gym.Env):
         self.sock_conn, addr = self.sock.accept()
         self.sock_conn.settimeout(socket_time_out) # Set time out
         self.rule_based_action = []
+        self.ego_s = None
         print("ZZZ connected at {}".format(addr))
 
         # Set action space
@@ -116,16 +117,35 @@ class ZZZCarlaEnv(gym.Env):
                 threshold = received_msg[state_dim+2]
                 RLpointx = received_msg[state_dim+3]
                 RLpointy = received_msg[state_dim+4]
+                input_reward = received_msg[state_dim+5]
+
                 self.rule_based_action = [(RLpointx, RLpointy)]
+
+                # judge if finish
+                done = False
 
                 # calculate reward:
                 # Originally means difference to rule-based action. This would finally train RL to the rule based decision.
-                reward = 50 - (abs(action[0] - RLpointx) + abs(action[1] - (RLpointy))) #+ 0.5 * ego_s
-                #TODO: change reward. Now test the state change
-                #reward = 0
-              
-                # judge if finish
-                done = False
+                # reward = 50 - (abs(action[0] - RLpointx) + abs(action[1] - (RLpointy))) #+ 0.5 * ego_s
+                #TODO: change reward.
+                # reward 1: he who goes forward should get a reward.
+                reward = 0
+                reward += 50 / (15/3.6) * (action[1] + 15/3.6)
+                print("reward1 = ", reward)
+
+                ego_s = self.state[0]
+                print("ego_s: ", ego_s)
+
+                if self.ego_s is None:
+                    self.ego_s = ego_s
+                else:
+                    if ego_s > self.ego_s:
+                        reward = reward + 10*(ego_s - self.ego_s)
+                    self.ego_s = ego_s
+
+                # reward 2: the planned trajectory should be inside the boundary. Calculated in VEG_planner.
+                reward = reward + input_reward
+                print("reward2 = ", reward2)
 
                 # reward 3: final status: collision, success or restart
                 if collision:
@@ -143,8 +163,8 @@ class ZZZCarlaEnv(gym.Env):
                     done = True
                     print("+++++++++++++++++++++ restart by code")
 
+                print("reward:", reward)
                 reward = reward / 500
-                print("reward=", reward)
                 
                 # self.record_rl_intxt(action, q_value, RLpointx, RLpointy, rule_q, collision, leave_current_mmap, ego_s, threshold)
                 no_state_flag = 0

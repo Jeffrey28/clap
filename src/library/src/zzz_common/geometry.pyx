@@ -150,6 +150,92 @@ cpdef dist_from_point_to_polyline2d(float x0, float y0, np.ndarray line, bint re
 
     return dist_closest, closest_idx, closest_type, dist_start, dist_end
 
+cpdef dist_from_point_to_closedpolyline2d(float x0, float y0, np.ndarray line, bint return_end_distance=False):
+    """
+    Calculate distance from point to a closed polyline (2D, no start or end, a closed circle)
+
+    :param (x0,y0): target point
+    :type (x0,y0): float, float
+    :param line: target polyline
+    :type line: np.ndarray, a Nx2 point array
+    :return: (distance_to_line, closest_point_index, closest_point_type); if return_end_distance, then also return (line_head_to_foot_point, foot_point_to_line_end)
+    :rtype: float, all returned distances are signed
+    """
+
+    if len(line) < 2:
+        raise ValueError("Cannot calculate distance to an empty line or a single point!")
+
+    cdef:
+        np.ndarray dist_line = npl.norm(line - [x0, y0], axis=1) # dist from current point (x0, y0) to line points
+        int closest_idx = np.argmin(dist_line) # index of closet point
+
+        int length = len(line)
+        int closest_type = 0 # 0: closest point, 1: next line of closest point, -1: previous line of closest point
+        float dist_closest # The actual closest distance from point to polyline
+        float dist_previous, dist_previous_head, dist_previous_tail # distance from point to previous line, previous line head, previous line tail
+        float dist_next, dist_next_head, dist_next_tail # distance from point to next line, next line head, next line tail
+        float dist_start, dist_end # distance to polyline start and polyline end
+
+    # Calculate distances mentioned above
+    if closest_idx == 0: # When this point is at line start
+        prev_id = -1
+        next_id = closest_idx + 1
+    elif closest_idx == length - 1: # When this point is at end
+        prev_id = closest_idx - 1
+        next_id = 0
+    else:
+        prev_id = closest_idx - 1
+        next_id = closest_idx + 1
+
+    dist_previous, dist_previous_head, dist_previous_tail = dist_from_point_to_line2d(x0, y0,
+        line[prev_id, 0], line[prev_id, 1],
+        line[closest_idx, 0], line[closest_idx, 1])
+    dist_next, dist_next_head, dist_next_tail = dist_from_point_to_line2d(x0, y0,
+        line[closest_idx, 0], line[closest_idx, 1],
+        line[next_id, 0], line[next_id, 1])
+
+    if dist_previous_tail < 0 and dist_next_head < 0: # case 5
+        dist_closest = dist_line[closest_idx]
+        # sign determination
+        if dist_from_point_to_line2d(
+            line[next_id, 0], line[next_id, 1],
+            line[prev_id, 0], line[prev_id, 1],
+            line[closest_idx, 0], line[closest_idx, 1])[0] > 0:
+            dist_closest *= -1
+    elif dist_previous_tail < 0: # case 6
+        dist_closest = dist_next
+        closest_type = 1
+    elif dist_next_head < 0: # case 7
+        dist_closest = dist_previous
+        closest_type = -1
+    else: # case 8
+        if abs(dist_next) > abs(dist_previous):
+            dist_closest = dist_previous
+            closest_type = -1
+        else:
+            dist_closest = dist_next
+            closest_type = 1
+
+    # Return early if total distance is not needed
+    if not return_end_distance:
+        return (dist_closest, closest_idx, closest_type)
+
+    # Calculate accumulated distance
+    if closest_type == 1:
+        # closer to next line segment
+        dist_start = dist_next_head + np.sum(npl.norm(np.diff(line[:closest_idx+1], axis=0), axis=1))
+        dist_end = dist_next_tail + np.sum(npl.norm(np.diff(line[closest_idx+1:], axis=0), axis=1))
+    elif closest_type == -1:
+        # closer to previous line segment
+        dist_start = dist_previous_head + np.sum(npl.norm(np.diff(line[:closest_idx], axis=0), axis=1))
+        dist_end = dist_previous_tail + np.sum(npl.norm(np.diff(line[closest_idx:], axis=0), axis=1))
+    else:
+        # closer to current point
+        dist_start = np.sum(npl.norm(np.diff(line[:closest_idx+1], axis=0), axis=1))
+        dist_end = np.sum(npl.norm(np.diff(line[closest_idx:], axis=0), axis=1))
+
+    return dist_closest, closest_idx, closest_type, dist_start, dist_end
+
 def dense_polyline2d(np.ndarray line, float resolution, str interp="linear"):
     """
     Dense a polyline by linear interpolation.

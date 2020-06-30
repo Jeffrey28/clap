@@ -380,13 +380,19 @@ def record_collsion_to_txt(ego_vehicle):
             if_intersection = True
             # print("++++++++++++++++++++++++++ in intersection")
     '''
+    ego_x = ego_vehicle.get_location().x
+    ego_y = -ego_vehicle.get_location().y
+
     if not if_intersection:
         if_write = False
         if_write_collision = False
 
     if if_intersection == True and if_write == False:
         fw = open("/home/carla/ZZZ/record_collision.txt", 'a')   
-        fw.write("into_intersection")   
+        if (-55 < ego_x < -45 and 17 < ego_y < 27) or (25 < ego_x < 35 and 25 < ego_y < 35):
+            fw.write("into false intersection")
+        else:
+            fw.write("into_intersection")   
         fw.write("\n")
         fw.close()               
         print("++++++++++++++++++++++++++ in intersection")
