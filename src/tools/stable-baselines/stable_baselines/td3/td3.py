@@ -316,6 +316,7 @@ class TD3(OffPolicyRLModel):
             n_updates = 0
             infos_values = []
             save_count = 0
+            save_count_growing = 0
             for step in range(total_timesteps):
                 if callback is not None:
                     # Only stop training if return value is False, not when it is None. This is for backwards
@@ -428,7 +429,8 @@ class TD3(OffPolicyRLModel):
                     infos_values = []
                 # zwt
                 save_count = save_count + 1
-                print("current step: ", save_count)
+                save_count_growing = save_count_growing + 1
+                print("current step: ", save_count_growing)
                 if save_count > 100:
                     try:
                         self.save(self.save_path)

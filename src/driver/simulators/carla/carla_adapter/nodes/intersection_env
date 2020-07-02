@@ -390,9 +390,9 @@ def record_collsion_to_txt(ego_vehicle):
     if if_intersection == True and if_write == False:
         fw = open("/home/carla/ZZZ/record_collision.txt", 'a')   
         if (-55 < ego_x < -45 and 17 < ego_y < 27) or (25 < ego_x < 35 and 25 < ego_y < 35):
-            fw.write("into false intersection")
+            fw.write("0") # into false intersection
         else:
-            fw.write("into_intersection")   
+            fw.write("1") # into intersection
         fw.write("\n")
         fw.close()               
         print("++++++++++++++++++++++++++ in intersection")
@@ -407,7 +407,7 @@ def record_collsion_to_txt(ego_vehicle):
         if collision_signal:
             # fw = open("/home/carla/ZZZ/zzz/src/driver/simulators/carla/carla_adapter/nodes/record_collision.txt", 'a')   
             fw = open("/home/carla/ZZZ/record_collision.txt", 'a')   
-            fw.write("collision")
+            fw.write("10") # collision
             fw.write("\n")
             fw.close()   
             

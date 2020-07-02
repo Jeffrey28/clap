@@ -145,7 +145,7 @@ class ZZZCarlaEnv(gym.Env):
 
                 # reward 2: the planned trajectory should be inside the boundary. Calculated in VEG_planner.
                 reward = reward + input_reward
-                print("reward2 = ", reward2)
+                print("reward2 = ", input_reward)
 
                 # reward 3: final status: collision, success or restart
                 if collision:
