@@ -74,7 +74,7 @@ class ZZZCarlaEnv(gym.Env):
             high[i*6+2] = 15.0
             high[i*6+3] = 7.0
             high[i*6+4] = 5.0
-            high[i*6+5] = 20.0
+            high[i*6+5] = 200.0
         
         '''self.state_dimention = 16
 

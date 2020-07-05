@@ -197,6 +197,8 @@ class Werling(object):
             # find closest point on the last trajectory
             mindist = float("inf")
             bestpoint = 0
+            print("last trajectory rule x length: ", len(self.last_trajectory_rule.x))
+            print("last trajectory rule t length: ", len(self.last_trajectory_rule.t))
             for t in range(len(self.last_trajectory_rule.t)):
                 pointdist = (self.last_trajectory_rule.x[t] - dynamic_map.ego_state.pose.pose.position.x) ** 2 + (self.last_trajectory_rule.y[t] - dynamic_map.ego_state.pose.pose.position.y) ** 2
                 if mindist >= pointdist:

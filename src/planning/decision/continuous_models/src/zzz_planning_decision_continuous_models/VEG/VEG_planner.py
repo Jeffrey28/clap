@@ -395,8 +395,10 @@ class VEG_Planner(object):
             rl_action[1] = rl_action[1] + ACTION_SPACE_SYMMERTY
             self.kick_in_signal = self.rivz_element.draw_kick_in_circles(self._dynamic_map.ego_state.pose.pose.position.x,
                         self._dynamic_map.ego_state.pose.pose.position.y, 3.5)
+            print("RL kick in!")
             return self._rule_based_trajectory_model_instance.trajectory_update_RL_kick(self._dynamic_map, rl_action)
         
         else:
             self.kick_in_signal = None
+            print("RL does not kick in!")
             return rule_trajectory_msg
