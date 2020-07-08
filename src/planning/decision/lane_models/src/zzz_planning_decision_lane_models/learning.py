@@ -2,11 +2,17 @@
 import socket
 import msgpack
 import rospy
+import numpy as np
+
 
 from zzz_cognition_msgs.msg import MapState
 from zzz_planning_decision_lane_models.longitudinal import IDM
 from zzz_planning_decision_lane_models.lateral import LaneUtility
 from zzz_driver_msgs.utils import get_speed
+from zzz_common.geometry import dense_polyline2d
+from zzz_common.kinematics import get_frenet_state
+
+
 
 class RLSDecision(object):
     """
@@ -19,8 +25,14 @@ class RLSDecision(object):
         self._rule_based_longitudinal_model_instance = IDM()
         self._rule_based_lateral_model_instance = LaneUtility(self._rule_based_longitudinal_model_instance)
         self._buffer_size = recv_buffer
-        self._collision_signal = False
-        self._collision_times = 0
+        self.collision_signal = False
+        self.collision_times = 0
+
+        self.inside_lane = None
+        self.outside_lane = None
+
+        self._out_multilane = True
+        self.decision_action = 0
 
 
         if mode == "client":
@@ -34,58 +46,108 @@ class RLSDecision(object):
             #     In this mode, only rule based action is returned to system
             raise NotImplementedError("Server mode is still wating to be implemented.")
 
+    def enter_junction(self):
+        '''
+        Send done to AI
+        '''
+        self._out_multilane = True
+        collision = int(self.collision_signal)
+        self.collision_signal = False
+        leave_current_mmap = 1
+        sent_RL_msg = [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+        sent_RL_msg.append(collision)
+        sent_RL_msg.append(leave_current_mmap)
+        self.sock.sendall(msgpack.packb(sent_RL_msg))
+
+        try:
+            RLS_action = msgpack.unpackb(self.sock.recv(self._buffer_size))
+        except:
+            pass
+
     def lateral_decision(self, dynamic_map):
 
         self._dynamic_map = dynamic_map
         self._rule_based_longitudinal_model_instance.update_dynamic_map(dynamic_map)
 
-        # Following reference path in junction # TODO(Zhong):should be in cognition part
-        if dynamic_map.model == MapState.MODEL_JUNCTION_MAP or dynamic_map.mmap.target_lane_index == -1:
-            # send done to OPENAI
-            collision = int(self._collision_signal)
-            self._collision_signal = False
-            leave_current_mmap = 1
-            sent_RL_msg = [0,0,100,0,12,-100,0,0,100,1,12,-100,1,0]
-            sent_RL_msg.append(collision)
-            sent_RL_msg.append(leave_current_mmap)
-            self.sock.sendall(msgpack.packb(sent_RL_msg))
-
-            return -1, self._rule_based_longitudinal_model_instance.longitudinal_speed(-1)
-
+        self._out_multilane = False
         RL_state = self.wrap_state()
-        rospy.logdebug("sending state: ego_y:%.1f, ego_v:%.1f", RL_state[0],RL_state[1])
         sent_RL_msg = RL_state
 
-        collision = int(self._collision_signal)
-        self._collision_signal = False
+        collision = int(self.collision_signal)
+        self.collision_signal = False
         leave_current_mmap = 0
         sent_RL_msg.append(collision)
         sent_RL_msg.append(leave_current_mmap)
 
-        self.sock.sendall(msgpack.packb(sent_RL_msg))
-        RLS_action = msgpack.unpackb(self.sock.recv(self._buffer_size))
-        # RLS_action = 0
-        rospy.logdebug("received action:%d", RLS_action)
+        try:
+            self.sock.sendall(msgpack.packb(sent_RL_msg))
+            RLS_action = msgpack.unpackb(self.sock.recv(self._buffer_size))
+            RLS_action = RLS_action
+            print("received action:", RLS_action)
+            return self.get_decision_from_discrete_action(RLS_action)
+        except:
+            return self.get_decision_from_discrete_action(0)
 
-        # discretize action # TODO(Zhong): continous action
-        return self.get_decision_from_discrete_action(RLS_action)
+    def wrap_state(self):     
 
-    def wrap_state(self):
+        state = [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+        
+        state[0] = 0
+        state[1] = self._dynamic_map.mmap.ego_lane_index
+        state[2] = get_speed(self._dynamic_map.ego_state)
+        state[3] = self._dynamic_map.ego_ffstate.vd
 
-        # ego state: ego_y(0), ego_v(1)
-        # lane 0 : fv_x(2), fv_y(3), fv_v(4), rv_x(5), rv_y(6), rv_v(7)
-        # lane 1 : fv_x(8), fv_y(9), fv_v(10), rv_x(11), rv_y(12), rv_v(13)
-        # lane 2:...
-        # State space = 2+6*lane_num
+        for k, lane in enumerate(self._dynamic_map.mmap.lanes):
 
-        state = []
-        ego_y = self._dynamic_map.mmap.ego_mmap_y
-        ego_v = self._dynamic_map.mmap.ego_mmap_vx
-        state.append(ego_y)
-        state.append(ego_v)
-        for i,lane in enumerate(self._dynamic_map.mmap.lanes):
-            self.get_state_from_lane(lane,i,state)
+            if len(lane.front_vehicles) > 0:
+                fv = lane.front_vehicles[0]
+                fv_id = fv.uid
+                fv_s = fv.ffstate.s
+                fv_d = fv.lane_index
+                fv_vs = fv.ffstate.vs
+                fv_vd = fv.ffstate.vd
+            else:
+                fv_s = 50
+                fv_d = k
+                fv_vs = 20
+                fv_vd = 0
+            
+            state[k*4+4] = fv_s
+            state[k*4+5] = fv_d
+            state[k*4+6] = fv_vs
+            state[k*4+7] = fv_vd
+        
+        if len(self._dynamic_map.mmap.lanes) == 1:
+            state[8] = 50
+            state[9] = 1
+            state[10] = 20
+            state[11] = 0
 
+        for k, lane in enumerate(self._dynamic_map.mmap.lanes):
+            
+            if len(lane.rear_vehicles) > 0:
+                rv = lane.rear_vehicles[0]
+                rv_id = rv.uid
+                rv_s = rv.ffstate.s
+                rv_d = rv.lane_index
+                rv_vs = rv.ffstate.vs
+                rv_vd = rv.ffstate.vd
+            else:
+                rv_s = -50
+                rv_d = k
+                rv_vs = 0
+                rv_vd = 0
+            
+            state[k*4+12] = rv_s
+            state[k*4+13] = rv_d
+            state[k*4+14] = rv_vs
+            state[k*4+15] = rv_vd
+
+        if len(self._dynamic_map.mmap.lanes) == 1:
+            state[16] = -50 
+            state[17] = 1
+            state[18] = 0
+            state[19] = 0
         return state
 
     def RL_model_matching(self):
@@ -93,99 +155,54 @@ class RLSDecision(object):
 
     def get_decision_from_discrete_action(self, action, acc = 2, decision_dt = 0.75, hard_brake = 4):
 
-        # TODO(Zhong): check if action is reasonable
+        self.decision_action = action
 
+        if len(self._dynamic_map.mmap.lanes) == 1:
+            self.inside_lane = 0
+            self.outside_lane = 0
+        else:
+            self.inside_lane = 1
+            self.outside_lane = 0
+        
         # Rule-based action
         if action == 0:
+            print("+++++++++++++++++++")
+            self.decision_action = 0.0
             return self._rule_based_lateral_model_instance.lateral_decision(self._dynamic_map)
 
         current_speed = get_speed(self._dynamic_map.ego_state)
-        ego_y = self._dynamic_map.mmap.ego_lane_index
+        ego_y = int(round(self._dynamic_map.mmap.ego_lane_index))
 
         # Hard-brake action
         if action == 1:
-            return ego_y, current_speed-hard_brake*decision_dt
+            self.decision_action = 1.0
+            return ego_y, current_speed - hard_brake * decision_dt
 
         # ego lane action
         if action == 2:
-            return ego_y, current_speed+acc*decision_dt
+            self.decision_action = 2.0
+            return self.outside_lane, current_speed
 
         if action == 3:
-            return ego_y, current_speed
+            self.decision_action = 3.0
+            return self.inside_lane, current_speed
 
         if action == 4:
-            return ego_y, current_speed-acc*decision_dt
+            self.decision_action = 4.0
+            return self.outside_lane, current_speed + acc * decision_dt
 
-        # left lane action
-        left_lane_index = ego_y+1
-        if left_lane_index >= len(self._dynamic_map.mmap.lanes):
-            if action == 5 or action == 6 or action == 7:
-                return self._rule_based_lateral_model_instance.lateral_decision(self._dynamic_map)
         if action == 5:
-            return left_lane_index, current_speed+acc*decision_dt
+            self.decision_action = 5.0
+            return self.inside_lane, current_speed + acc * decision_dt
 
         if action == 6:
-            return left_lane_index, current_speed
+            self.decision_action = 6.0
+            return self.outside_lane, current_speed - acc * decision_dt
 
         if action == 7:
-            return left_lane_index, current_speed-acc*decision_dt
+            self.decision_action = 7.0
+            return self.inside_lane, current_speed - acc * decision_dt
 
-        #right_lane_action
-        right_lane_index = ego_y-1
-        if right_lane_index < 0:
-            if action == 8 or action == 9 or action == 10:
-                return self._rule_based_lateral_model_instance.lateral_decision(self._dynamic_map)
-        if action == 8:
-            return right_lane_index, current_speed+acc*decision_dt
-
-        if action == 9:
-            return right_lane_index, current_speed
-
-        if action == 10:
-            return right_lane_index, current_speed-acc*decision_dt
-
-
-    def get_state_from_lane(self,lane,lane_index,state,
-                                range_x = 100,
-                                range_vx = 50/3.6
-                                ):
-        if len(lane.front_vehicles) > 0:
-            fv = lane.front_vehicles[0]
-            fv_id = fv.uid
-            fv_x = fv.mmap_x
-            fv_y = fv.mmap_y
-            fv_vx = fv.mmap_vx
-            # fv_vy = fv.mmap_vy # FIXME(zhong): should consider lane change speed
-        else:
-            # default fv # TODO(zhong): More reasonable default value
-            fv_id = 0
-            fv_x = range_x
-            fv_y = lane_index
-            fv_vx = range_vx
-            # fv_vy = 0
-
-        state.append(fv_x)
-        state.append(fv_y)
-        state.append(fv_vx)
-        # state.append(fv_vy)
-
-        if len(lane.rear_vehicles) > 0:
-            rv = lane.rear_vehicles[0]
-            rv_id = rv.uid
-            rv_x = rv.mmap_x # negative value
-            rv_y = rv.mmap_y
-            rv_vx = rv.mmap_vx
-            # rv_vy = rv.mmap_vy # FIXME(zhong): should consider lane change speed
-        else:
-            rv_id = 0
-            rv_x = -range_x
-            rv_y = lane_index
-            rv_vx = 0
-            # rv_vy = 0
-        state.append(rv_x)
-        state.append(rv_y)
-        state.append(rv_vx)
-        # state.append(rv_vy)
-
-        rospy.logdebug("lane %d: (%d)fv_x:%.1f, fv_y:%.1f, fv_vx:%.1f,||(%d)rv_x:%.1f, rv_y:%.1f, rv_vx:%.1f", lane_index,
-                                        fv_id,fv_x,fv_y,fv_vx,rv_id,rv_x,rv_y,rv_vx)
+        print("------------------------Wrong action type")
+        self.decision_action = -1.0
+        return self._rule_based_lateral_model_instance.lateral_decision(self._dynamic_map)

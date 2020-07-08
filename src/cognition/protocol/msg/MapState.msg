@@ -1,9 +1,10 @@
-# This message represents a homogeneous representation of dynamic map
+# This message represents a decision_oriented specific representation of dynamic map
 
 Header header
 
 # Ego Vehicle Info
 zzz_driver_msgs/RigidBodyState ego_state
+zzz_driver_msgs/FrenetSerretState2D ego_ffstate
 
 # ----- Map Model indicator -----
 
