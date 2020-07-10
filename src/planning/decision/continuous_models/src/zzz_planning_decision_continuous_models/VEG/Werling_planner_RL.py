@@ -33,7 +33,7 @@ D_T_S = 5.0 / 3.6  # target speed sampling length [m/s]
 N_S_SAMPLE = 2  # sampling number of target speed
 
 # RL paramter
-MIN_SPEED_RL = 3/3.6 # min speed for rl planning [m/s]
+MIN_SPEED_RL = 0/3.6 # min speed for rl planning [m/s]
 KICK_IN_TIME = 2.25 # kick in time for rl action [s]
 
 # collision check
@@ -198,8 +198,10 @@ class Werling(object):
             mindist = float("inf")
             bestpoint = 0
             print("last trajectory rule x length: ", len(self.last_trajectory_rule.x))
+            print("last trajectory rule y length: ", len(self.last_trajectory_rule.y))
             print("last trajectory rule t length: ", len(self.last_trajectory_rule.t))
-            for t in range(len(self.last_trajectory_rule.t)):
+            loop_range = min(len(self.last_trajectory_rule.x), len(self.last_trajectory_rule.x), len(self.last_trajectory_rule.x))
+            for t in range(loop_range):
                 pointdist = (self.last_trajectory_rule.x[t] - dynamic_map.ego_state.pose.pose.position.x) ** 2 + (self.last_trajectory_rule.y[t] - dynamic_map.ego_state.pose.pose.position.y) ** 2
                 if mindist >= pointdist:
                     mindist = pointdist

@@ -238,3 +238,55 @@ cpdef get_frenet_state_boundary_point(cartesian_state, np.ndarray polyline, tang
 
     return frenet
 
+cpdef get_frenet_state_pure_xy(x, y, np.ndarray polyline, tangents):
+    '''
+    Convert state from cartesian coordinate to frenet state of a polyline.
+
+    :param cartesian_state: state in cartesian system
+    :type cartesian_state: DynamicBoundaryPoint
+    :param polyline: the polyline that frenet coordinate is based on
+    :type polyline: np.ndarray, should in form Nx2 from line start to line end
+
+    TODO(zyxin): Use more precise conversion described here: https://blog.csdn.net/davidhopper/article/details/79162385
+    '''
+
+    cdef:
+        float dist, psi
+        int nearest_idx, nearest_type
+
+    dist, nearest_idx, nearest_type, dist_start, dist_end = dist_from_point_to_polyline2d(
+        x, y, polyline, return_end_distance=True)
+
+    if nearest_type == 1:
+        psi = math.atan2(
+            polyline[nearest_idx+1, 1] - polyline[nearest_idx, 1],
+            polyline[nearest_idx+1, 0] - polyline[nearest_idx, 0])
+    elif nearest_type == -1:
+        psi = math.atan2(
+            polyline[nearest_idx, 1] - polyline[nearest_idx-1, 1],
+            polyline[nearest_idx, 0] - polyline[nearest_idx-1, 0],
+        )
+    else:
+        psi = tangents[nearest_idx]
+
+    rot = np.array([
+        [math.cos(psi), math.sin(psi)],
+        [-math.sin(psi), math.cos(psi)]
+    ])
+
+    # frenet.psi is not used
+    # TODO: might add in the future
+    frenet = FrenetSerretState2D()
+    frenet.s = dist_start
+    frenet.d = dist
+
+    # the following are not used
+    frenet.vs = 0
+    frenet.vd = 0
+    frenet.omega = 0
+    frenet.psi = 0
+    frenet.sa = 0
+    frenet.ad = 0
+    frenet.epsilon = 0
+
+    return frenet

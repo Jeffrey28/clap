@@ -290,7 +290,8 @@ def calculate_next_drivable_area(tstates):
             tstates.next_drivable_area.append(point)
         
         #close the figure
-        tstates.next_drivable_area.append(tstates.next_drivable_area[0])
+        if len(tstates.next_drivable_area) > 0:
+            tstates.next_drivable_area.append(tstates.next_drivable_area[0])
 
         rospy.loginfo("next_drivable_area constructed with length %d", len(tstates.next_drivable_area))
 
@@ -723,7 +724,8 @@ def calculate_drivable_area(tstates):
             tstates.drivable_area.append(point)
         
         #close the figure
-        tstates.drivable_area.append(tstates.drivable_area[0])
+        if len(tstates.drivable_area) > 0:
+            tstates.drivable_area.append(tstates.drivable_area[0])
 
         rospy.loginfo("drivable_area constructed with length %d", len(tstates.drivable_area))
 

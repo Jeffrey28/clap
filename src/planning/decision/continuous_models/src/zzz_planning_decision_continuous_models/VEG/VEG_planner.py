@@ -9,7 +9,7 @@ from zzz_cognition_msgs.msg import MapState
 from zzz_driver_msgs.utils import get_speed
 from carla import Location, Rotation, Transform
 from zzz_common.geometry import dense_polyline2d, dist_from_point_to_closedpolyline2d
-from zzz_common.kinematics import get_frenet_state, get_frenet_state_boundary_point
+from zzz_common.kinematics import get_frenet_state, get_frenet_state_boundary_point, get_frenet_state_pure_xy
 
 from zzz_planning_msgs.msg import DecisionTrajectory
 from zzz_planning_decision_continuous_models.VEG.Werling_planner_RL import Werling
@@ -110,7 +110,7 @@ class VEG_Planner(object):
             sent_RL_msg.append(leave_current_mmap)
             sent_RL_msg.append(THRESHOLD) # threshold
             sent_RL_msg.append(0.0) # Rule_based_point.d
-            sent_RL_msg.append(0.0 - ACTION_SPACE_SYMMERTY) # Rule_based_point.vs
+            sent_RL_msg.append(0.0) # Rule_based_point.vs
             sent_RL_msg.append(0)
             rospy.loginfo("sent msg length, %d", len(sent_RL_msg))
             self.sock.sendall(msgpack.packb(sent_RL_msg))
@@ -224,27 +224,50 @@ class VEG_Planner(object):
                 
                 VEG_trajectory = self.generate_VEG_trajectory(rl_q, rule_q, rl_action, rule_trajectory_msg)
                 trajectory_points = VEG_trajectory.trajectory.poses
+                print("temp safe...")
 
                 # reward: if the vehicle is running out of the drivable area, punish it.
                 
                 reward = 0
-                for i in len(trajectory_points):
-                    pointx = trajectory_points[i].pose.position.x
-                    pointy = trajectory_points[i].pose.position.y
+                print("len(trajectory_points): ", len(trajectory_points))
+                print("drivable area array: ", drivable_area_array)
+                ego_s = sent_RL_msg[0]
+                ego_d = sent_RL_msg[1]
+                dist_ego, _, _, = dist_from_point_to_closedpolyline2d(ego_s, ego_d, drivable_area_array)
+                print("dist_ego", dist_ego)
+                if dist_ego >= 0:
+                    print("ego vehicle has still not entered the junction, reward2 set to 0.")
+                else:
+                    for i in range(len(trajectory_points)):
+                        if i > 20:
+                            break
+                        pointx = trajectory_points[i].pose.position.x
+                        pointy = trajectory_points[i].pose.position.y
+                        traj_point_ffstate = get_frenet_state_pure_xy(pointx, pointy, self.ref_path, self.ref_path_tangets)
+                        point_s = traj_point_ffstate.s
+                        point_d = traj_point_ffstate.d
 
-                    dist1, _, _, = dist_from_point_to_closedpolyline2d(pointx, pointy, drivable_area_array)
-                    if dist1 >= 0:
-                        if len(next_drivable_area_array) > 0:
-                            dist2, _, _, = dist_from_point_to_closedpolyline2d(pointx, pointy, next_drivable_area_array)
-                            if dist2 >= 0:
-                                print("trajectory conflicts to the drivable area and next drivable area!")
-                                reward = -1000
+                        if len(drivable_area_array) >= 3:
+                            dist1, _, _, = dist_from_point_to_closedpolyline2d(point_s, point_d, drivable_area_array)
+                            print("examining traj point: ", point_s, point_d)
+                            print("dist1: ", dist1)
+                            if dist1 >= 0:
+                                if len(next_drivable_area_array) >= 3:
+                                    dist2, _, _, = dist_from_point_to_closedpolyline2d(point_s, point_d, next_drivable_area_array)
+                                    if dist2 >= 0:
+                                        print("dist2: ", dist2)
+                                        print("trajectory conflicts to the drivable area and next drivable area!")
+                                        reward = -30*(20-i)
+                                        break
+                                else:
+                                    print("trajectory conflicts to the drivable area!")
+                                    reward = -15*(20-i)+1
+                                    break
                         else:
-                            print("trajectory conflicts to the drivable area!")
-                            reward = -1000
-                            
+                            break
 
-                self.reward_buffer = reward
+                self.reward_buffer = reward #jxy0709: now the dynamic boundary is not in order, should be adjusted.
+                print("temp safe...")
 
                 return VEG_trajectory
             
@@ -301,6 +324,23 @@ class VEG_Planner(object):
         state = [0, 0, 0, 0, 0, 0]
 
         # ego state
+        # orientation
+        x = self._dynamic_map.ego_state.pose.pose.orientation.x
+        y = self._dynamic_map.ego_state.pose.pose.orientation.y
+        z = self._dynamic_map.ego_state.pose.pose.orientation.z
+        w = self._dynamic_map.ego_state.pose.pose.orientation.w
+
+        rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
+        rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
+
+        dx = [1, 0, 0]
+        ego_direction_xyz = np.matmul(rotation_mat_inverse, dx)
+        ego_direction = math.atan2(ego_direction_xyz[1], ego_direction_xyz[0])
+        print("ego direction: ", ego_direction, "\n\n")
+        ego_x = self._dynamic_map.ego_state.pose.pose.position.x
+        ego_y = self._dynamic_map.ego_state.pose.pose.position.y
+        print("ego xy: ", ego_x, ego_y)
+
         ego_ffstate = get_frenet_state(self._dynamic_map.ego_state, self.ref_path, self.ref_path_tangets)
         state[0] = ego_ffstate.s
         state[1] = -ego_ffstate.d
@@ -309,20 +349,39 @@ class VEG_Planner(object):
         state[4] = 0
         state[5] = 0
 
+        #boundary points, start from those in front of ego vehicle
+        start_angle = 0.78 + ego_direction
+        if start_angle > math.pi:
+            start_angle = start_angle - 2 * math.pi
+
+        point_direction_diff_array = []
+        for i in range(len(self._dynamic_boundary.boundary)):
+            point_direction = math.atan2(self._dynamic_boundary.boundary[i].y-ego_y, self._dynamic_boundary.boundary[i].x-ego_x)
+            print("point: ", self._dynamic_boundary.boundary[i].x, self._dynamic_boundary.boundary[i].y)
+            print("point direction: ", point_direction)
+            point_direction_diff_array.append(abs(point_direction - start_angle))
+
+        start_point_index = 0
+        if len(point_direction_diff_array) > 0:
+            start_point_index = point_direction_diff_array.index(min(point_direction_diff_array)) #nearset to the start angle
+
         for i in range(79):
             #TODO: check the max boundary list length
             if i >= len(self._dynamic_boundary.boundary):
                 for j in range(6):
                     state.append(0)
             else:
-                point_ffstate = get_frenet_state_boundary_point(self._dynamic_boundary.boundary[i], self.ref_path, self.ref_path_tangets)
+                ii = start_point_index + i
+                if ii >= len(self._dynamic_boundary.boundary):
+                    ii = ii - len(self._dynamic_boundary.boundary)
+                point_ffstate = get_frenet_state_boundary_point(self._dynamic_boundary.boundary[ii], self.ref_path, self.ref_path_tangets)
                 s = point_ffstate.s
                 d = point_ffstate.d
                 vs = point_ffstate.vs
                 vd = point_ffstate.vd
 
-                omega = self._dynamic_boundary.boundary[i].omega
-                flag = int(self._dynamic_boundary.boundary[i].flag*10) #socket transmit limit, must use int instead of float
+                omega = self._dynamic_boundary.boundary[ii].omega
+                flag = int(self._dynamic_boundary.boundary[ii].flag*10) #socket transmit limit, must use int instead of float
 
                 state.append(s)
                 state.append(d)
@@ -330,6 +389,10 @@ class VEG_Planner(object):
                 state.append(vd)
                 state.append(omega)
                 state.append(flag)
+
+                point_direction = math.atan2(self._dynamic_boundary.boundary[ii].y-ego_y, self._dynamic_boundary.boundary[ii].x-ego_x)
+                print("point sorted: ", self._dynamic_boundary.boundary[ii].x, self._dynamic_boundary.boundary[ii].y)
+                print("point direction sorted: ", point_direction)
 
         # if collision
         collision = int(self._collision_signal)
@@ -376,9 +439,9 @@ class VEG_Planner(object):
     def get_RL_point_from_trajectory(self, frenet_trajectory_rule):
         RLpoint = Transform()
 
-        if len(frenet_trajectory_rule.t) > 15:
-            RLpoint.location.x = frenet_trajectory_rule.d[15] #only works when DT param of werling is 0.15
-            RLpoint.location.y = frenet_trajectory_rule.s_d[15] - ACTION_SPACE_SYMMERTY
+        if len(frenet_trajectory_rule.t) >= 1:
+            RLpoint.location.x = frenet_trajectory_rule.d[-1] #only works when DT param of werling is 0.15
+            RLpoint.location.y = frenet_trajectory_rule.s_d[1-1] - ACTION_SPACE_SYMMERTY
         else:
             RLpoint.location.x = 0
             RLpoint.location.y = 0 - ACTION_SPACE_SYMMERTY

@@ -375,7 +375,8 @@ class TD3(OffPolicyRLModel):
                         n_updates += 1
                         # Compute current learning_rate
                         frac = 1.0 - step / total_timesteps
-                        current_lr = self.learning_rate(frac)
+                        current_lr = self.learning_rate(1) * frac
+                        print("current lr:", current_lr)
                         # Update policy and critics (q functions)
                         # Note: the policy is updated less frequently than the Q functions
                         # this is controlled by the `policy_delay` parameter
