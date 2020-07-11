@@ -457,6 +457,90 @@ def next_lane_section_points_generation(starts, ends, startvx, startvy, endvx, e
             j = len(pointlist) - 1 - i
             tstates.next_drivable_area.append(pointlist[j])
 
+def next_lane_section_points_generation_united(starts, ends, startvx, startvy, endvx, endvy, lane_boundaries, next_static_area):
+
+    #set the velocity of the start point to 0, since the velocity of point i refers to the velocity of the edge between i and i+1
+    startvx = 0
+    startvy = 0
+    if starts <= ends:
+        smalls = starts
+        bigs = ends
+        smallvx = startvx
+        smallvy = startvy
+        bigvx = endvx
+        bigvy = endvy
+    else:
+        smalls = ends
+        bigs = starts
+        smallvx = endvx
+        smallvy = endvy
+        bigvx = startvx
+        bigvy = startvy
+    
+    pointlist = []
+    for j in range(len(lane_boundaries)):
+        if lane_boundaries[j].boundary_point.s <= smalls:
+            if j == len(lane_boundaries) - 1:
+                break
+            if lane_boundaries[j+1].boundary_point.s > smalls:
+                #if s < start point s, it cannot be the last point, so +1 is ok
+                point1 = lane_boundaries[j].boundary_point
+                point2 = lane_boundaries[j+1].boundary_point
+
+                #projection to the longitudinal direction
+                direction = math.atan2(point2.position.y - point1.position.y, point2.position.x - point1.position.x)
+
+                v_value = smallvx * math.cos(direction) + smallvy * math.sin(direction)
+                vx_s = v_value * math.cos(direction)
+                vy_s = v_value * math.sin(direction)
+                flag = 0
+                if v_value > 0.1:
+                    flag = 2
+                else:
+                    flag = 1
+
+                pointx = point1.position.x + (point2.position.x - point1.position.x) * (smalls - point1.s) / (point2.s - point1.s)
+                pointy = point1.position.y + (point2.position.y - point1.position.y) * (smalls - point1.s) / (point2.s - point1.s)
+                point = [pointx, pointy, vx_s, vy_s, 0, flag]
+                pointlist.append(point)
+        elif lane_boundaries[j].boundary_point.s > smalls and lane_boundaries[j].boundary_point.s < bigs:
+            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0, 0, 1]
+            pointlist.append(point)
+        elif lane_boundaries[j].boundary_point.s >= bigs:
+            if j == 0:
+                break
+            if lane_boundaries[j-1].boundary_point.s < bigs:
+                point1 = lane_boundaries[j-1].boundary_point
+                point2 = lane_boundaries[j].boundary_point
+
+                #projection to the longitudinal direction
+                direction = math.atan2(point2.position.y - point1.position.y, point2.position.x - point1.position.x)
+
+                v_value = bigvx * math.cos(direction) + bigvy * math.sin(direction)
+                vx_s = v_value * math.cos(direction)
+                vy_s = v_value * math.sin(direction)
+                flag = 0
+                if v_value > 0.1:
+                    flag = 2
+                else:
+                    flag = 1
+                #the angular velocity in lanes need not be considered, so omega = 0
+
+                pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
+                pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
+                point = [pointx, pointy] # only static
+                pointlist.append(point)
+
+    if starts <= ends:
+        for i in range(len(pointlist)):
+            point = pointlist[i]
+            next_static_area.append(point)
+    else:
+        # in reverse order
+        for i in range(len(pointlist)):
+            j = len(pointlist) - 1 - i
+            next_static_area.append(pointlist[j])
+
 def calculate_drivable_area(tstates):
     '''
     A list of boundary points of drivable area
@@ -471,6 +555,8 @@ def calculate_drivable_area(tstates):
         ego_x = tstates.ego_vehicle_state.state.pose.pose.position.x
         ego_y = tstates.ego_vehicle_state.state.pose.pose.position.y
 
+        ego_s = 0 #for next unit (road section)
+
         #a boundary point is represented by 6 numbers, namely x, y, vx, vy, omega and flag
         angle_list = []
         dist_list = []
@@ -480,18 +566,108 @@ def calculate_drivable_area(tstates):
         omega_list = []
         flag_list = []
 
-        if len(tstates.static_map.drivable_area.points) >= 3:
+        # jxy0710: try to merge the next static boundary into the junction boundary to make one closed boundary, then add dynamic objects
+        rospy.loginfo("next unit in lanes:")
+        #create a list of lane section, each section is defined as (start point s, end point s)
+        #calculate from the right most lane to the left most lane, drawing drivable area boundary in counterclockwise
+        lane_num = len(tstates.static_map.next_lanes)
+        #jxy: velocity of the vehicle in front and the vehicle behind are included in the lane sections
+        #velocity is initialized to 0
+        lane_sections = np.zeros((lane_num, 6))
+        for i in range(len(tstates.static_map.next_lanes)):
+            lane_sections[i, 0] = max(ego_s - 10, 0)
+            lane_sections[i, 1] = min(ego_s + 10, tstates.static_map.next_lanes[i].central_path_points[-1].s)
+            lane_sections[i, 2] = 0 #vx in front
+            lane_sections[i, 3] = 0 #vy in front
+            lane_sections[i, 4] = 0 #vx behind
+            lane_sections[i, 5] = 0 #vy behind
+            #TODO: projection to the vertial direction
+
+        next_static_area = []
+        
+        for i in range(len(tstates.static_map.next_lanes)):
+            lane = tstates.static_map.next_lanes[i]
+            if i == 0:
+                next_lane_section_points_generation_united(lane_sections[i, 0], lane_sections[i, 1], lane_sections[i, 2], \
+                    lane_sections[i, 3], lane_sections[i, 4], lane_sections[i, 5],lane.right_boundaries, next_static_area)
+            
+            if i != 0:
+                next_lane_section_points_generation_united(lane_sections[i-1, 1], lane_sections[i, 1], lane_sections[i-1, 4], \
+                    lane_sections[i-1, 5], lane_sections[i, 4], lane_sections[i, 5], lane.right_boundaries, next_static_area)
+                if i != len(tstates.static_map.next_lanes) - 1:
+                    next_lane_section_points_generation_united(lane_sections[i, 1], lane_sections[i+1, 1], lane_sections[i, 4], \
+                    lane_sections[i, 5], lane_sections[i+1, 4], lane_sections[i+1, 5], lane.left_boundaries, next_static_area)
+                else:
+                    next_lane_section_points_generation_united(lane_sections[i, 1], lane_sections[i, 0], lane_sections[i, 4], \
+                    lane_sections[i, 5], lane_sections[i, 2], lane_sections[i, 3], lane.left_boundaries, next_static_area)
+
+            if len(tstates.static_map.next_lanes) == 1:
+                next_lane_section_points_generation_united(lane_sections[i, 1], lane_sections[i, 0], lane_sections[i, 4], \
+                    lane_sections[i, 5], lane_sections[i, 2], lane_sections[i, 3], lane.left_boundaries, next_static_area)
+
+        #The lower part are removed.
+
+        rospy.loginfo("half next_drivable_area constructed with length %d", len(tstates.next_drivable_area))
+
+        # joint point: the start point of the right most lane boundary of the next lanes. It is also a point in current drivable area.
+        # It is the first point of the next static area.
+
+        key_node_list = []
+
+        if len(next_static_area) > 0:    
+            joint_point = next_static_area[0]
+            joint_point_x = joint_point[0]
+            joint_point_y = joint_point[1]
+
+            print("joint point: ", joint_point_x, joint_point_y)
+
+            dist_array = []
+            if len(tstates.static_map.drivable_area.points) >= 3:
+                for i in range(len(tstates.static_map.drivable_area.points)):
+                    node_point = tstates.static_map.drivable_area.points[i]
+                    node_point_x = node_point.x
+                    node_point_y = node_point.y
+                    dist_to_joint_point = math.sqrt(pow((node_point_x - joint_point_x), 2) + pow((node_point_y - joint_point_y), 2))
+                    dist_array.append(dist_to_joint_point)
+
+            joint_point2_index = dist_array.index(min(dist_array)) # the index of the point in drivable area that equals to the joint point
+            print("joint point2 index: ", joint_point2_index)
+            print("joint point2: ", tstates.static_map.drivable_area.points[joint_point2_index].x, tstates.static_map.drivable_area.points[joint_point2_index].y)
+        
+            key_node_list = []
+            for i in range(len(tstates.static_map.drivable_area.points)):
+                j = len(tstates.static_map.drivable_area.points) - 1 - i
+                node_point = tstates.static_map.drivable_area.points[j]
+                key_node_list.append([node_point.x, node_point.y])
+                if j == joint_point2_index:
+                    for k in range(len(next_static_area)):
+                        if k != 0: # the joint point needs not be added again
+                            key_node_list.append(next_static_area[k])
+
+            key_node_list.reverse()
+
+        else:
             for i in range(len(tstates.static_map.drivable_area.points)):
                 node_point = tstates.static_map.drivable_area.points[i]
-                last_node_point = tstates.static_map.drivable_area.points[i-1]
+                print(node_point)
+                key_node_list.append([node_point.x, node_point.y])
+
+        #TODO: 1. Form a key node list, use the key node list to execute the following step
+        # 2. The key node list should be clockwise, but it should be counterclockwise first, to add the points in the next static area
+        # 3. Reverse the key node list
+
+        if len(key_node_list) >= 3:
+            for i in range(len(key_node_list)):
+                node_point = key_node_list[i]
+                last_node_point = key_node_list[i-1]
                 #point = [node_point.x, node_point.y]
                 #shatter the figure
-                vertex_dist = math.sqrt(pow((node_point.x - last_node_point.x), 2) + pow((node_point.y - last_node_point.y), 2))
+                vertex_dist = math.sqrt(pow((node_point[0] - last_node_point[0]), 2) + pow((node_point[1] - last_node_point[1]), 2))
                 if vertex_dist > 0.2:
                     #add interp points by step of 0.2m
                     for j in range(int(vertex_dist / 0.2)):
-                        x = last_node_point.x + 0.2 * (j + 1) / vertex_dist * (node_point.x - last_node_point.x)
-                        y = last_node_point.y + 0.2 * (j + 1) / vertex_dist * (node_point.y - last_node_point.y)
+                        x = last_node_point[0] + 0.2 * (j + 1) / vertex_dist * (node_point[0] - last_node_point[0])
+                        y = last_node_point[1] + 0.2 * (j + 1) / vertex_dist * (node_point[1] - last_node_point[1])
                         angle_list.append(math.atan2(y - ego_y, x - ego_x))
                         dist_list.append(math.sqrt(pow((x - ego_x), 2) + pow((y - ego_y), 2)))
                         #the velocity of static boundary is 0
@@ -501,8 +677,8 @@ def calculate_drivable_area(tstates):
                         flag_list.append(1) #static boundary
                         id_list.append(-1) #static boundary, interp points (can be deleted)
                 
-                angle_list.append(math.atan2(node_point.y - ego_y, node_point.x - ego_x))
-                dist_list.append(math.sqrt(pow((node_point.x - ego_x), 2) + pow((node_point.y - ego_y), 2)))
+                angle_list.append(math.atan2(node_point[1] - ego_y, node_point[0] - ego_x))
+                dist_list.append(math.sqrt(pow((node_point[0] - ego_x), 2) + pow((node_point[1] - ego_y), 2)))
                 vx_list.append(0)
                 vy_list.append(0)
                 omega_list.append(0)

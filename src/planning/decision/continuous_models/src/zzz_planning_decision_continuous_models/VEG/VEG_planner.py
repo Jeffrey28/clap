@@ -147,12 +147,6 @@ class VEG_Planner(object):
             sent_RL_msg.append(RLpoint.location.y)
             sent_RL_msg.append(self.reward_buffer)
 
-            print("-----------------------------",sent_RL_msg)
-            rospy.loginfo("sent msg length, %d", len(sent_RL_msg))
-            self.sock.sendall(msgpack.packb(sent_RL_msg))
-            rospy.loginfo("sent RL msg succeeded!!!\n\n\n")
-
-
             # Prepare for calculating the reward by the planned trajectory.
             # Decoding drivable area, next drivable area and broken lanes. From dynamic boundary.
             
@@ -215,6 +209,24 @@ class VEG_Planner(object):
             drivable_area_array = np.array(drivable_area_list)
             next_drivable_area_array = np.array(next_drivable_area_list)
 
+            #jxy 0710: when ego vehicle is still out of the junction, do not train.
+            if len(drivable_area_array) < 3:
+                print("It is a false junction, return!")
+                return rule_trajectory_msg
+
+            ego_s = sent_RL_msg[0]
+            ego_d = sent_RL_msg[1]
+            dist_ego, _, _, = dist_from_point_to_closedpolyline2d(ego_s, ego_d, drivable_area_array)
+            print("dist_ego", dist_ego)
+            if dist_ego >= 0:
+                print("ego vehicle has still not entered the junction, return!")
+                return rule_trajectory_msg
+
+            print("-----------------------------",sent_RL_msg)
+            rospy.loginfo("sent msg length, %d", len(sent_RL_msg))
+            self.sock.sendall(msgpack.packb(sent_RL_msg))
+            rospy.loginfo("sent RL msg succeeded!!!\n\n\n")
+
             # received RL action and plan a RL trajectory
             try:
                 received_msg = msgpack.unpackb(self.sock.recv(self._buffer_size))
@@ -269,7 +281,7 @@ class VEG_Planner(object):
                 self.reward_buffer = reward #jxy0709: now the dynamic boundary is not in order, should be adjusted.
                 print("temp safe...")
 
-                return VEG_trajectory
+                return VEG_trajectory #jxy0710: dangerous attempt!
             
             except:
                 rospy.logerr("Continous RLS Model cannot receive an action")
@@ -357,16 +369,15 @@ class VEG_Planner(object):
         point_direction_diff_array = []
         for i in range(len(self._dynamic_boundary.boundary)):
             point_direction = math.atan2(self._dynamic_boundary.boundary[i].y-ego_y, self._dynamic_boundary.boundary[i].x-ego_x)
-            print("point: ", self._dynamic_boundary.boundary[i].x, self._dynamic_boundary.boundary[i].y)
-            print("point direction: ", point_direction)
+            #print("point: ", self._dynamic_boundary.boundary[i].x, self._dynamic_boundary.boundary[i].y)
+            #print("point direction: ", point_direction)
             point_direction_diff_array.append(abs(point_direction - start_angle))
 
         start_point_index = 0
         if len(point_direction_diff_array) > 0:
-            start_point_index = point_direction_diff_array.index(min(point_direction_diff_array)) #nearset to the start angle
+            start_point_index = point_direction_diff_array.index(min(point_direction_diff_array)) #nearest to the start angle
 
         for i in range(79):
-            #TODO: check the max boundary list length
             if i >= len(self._dynamic_boundary.boundary):
                 for j in range(6):
                     state.append(0)
@@ -390,9 +401,9 @@ class VEG_Planner(object):
                 state.append(omega)
                 state.append(flag)
 
-                point_direction = math.atan2(self._dynamic_boundary.boundary[ii].y-ego_y, self._dynamic_boundary.boundary[ii].x-ego_x)
-                print("point sorted: ", self._dynamic_boundary.boundary[ii].x, self._dynamic_boundary.boundary[ii].y)
-                print("point direction sorted: ", point_direction)
+                #point_direction = math.atan2(self._dynamic_boundary.boundary[ii].y-ego_y, self._dynamic_boundary.boundary[ii].x-ego_x)
+                #print("point sorted: ", self._dynamic_boundary.boundary[ii].x, self._dynamic_boundary.boundary[ii].y)
+                #print("point direction sorted: ", point_direction)
 
         # if collision
         collision = int(self._collision_signal)

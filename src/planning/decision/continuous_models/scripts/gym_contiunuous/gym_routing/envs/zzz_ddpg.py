@@ -132,17 +132,17 @@ class ZZZCarlaEnv(gym.Env):
                 print("ego_vs: ", ego_vs)
                 punish_angle = min(pow(abs(action[0] - RLpointx), 3), 8)
                 punish_speed = min(pow(abs(ego_vs - RLpointy), 1.5), 8)
-                reward_speed = min(pow(abs(ego_vs), 2), 8)
+                #reward_speed = min(pow(abs(ego_vs), 2), 8)
                 print("punish angle: ", punish_angle)
                 print("punish speed: ", punish_speed)
-                print("reward speed: ", reward_speed)
+                #print("reward speed: ", reward_speed)
                 #reward = 10 * (5 - (abs(action[0] - RLpointx) - abs(action[1] - RLpointy)))# + 0.5 * ego_s
                 #reward = 10 * (5 - punish_angle - punish_speed)
                 #TODO: change reward.
                 # reward 1: he who goes forward should get a reward.
-                reward = 5 * (15 - punish_angle - punish_speed + reward_speed)
+                reward = 5 * (15 - punish_angle - punish_speed)
                 
-                print("ego_s: ", ego_s)
+                '''print("ego_s: ", ego_s)
 
                 if self.ego_s is None:
                     self.ego_s = ego_s
@@ -151,7 +151,7 @@ class ZZZCarlaEnv(gym.Env):
                         reward = reward + 10*(ego_s - self.ego_s)
                     self.ego_s = ego_s
 
-                print("reward ego_s: ", 10*(ego_s - self.ego_s))
+                print("reward ego_s: ", 10*(ego_s - self.ego_s))'''
 
                 # reward 2: the planned trajectory should be inside the boundary. Calculated in VEG_planner.
                 #reward = reward + input_reward
@@ -160,13 +160,13 @@ class ZZZCarlaEnv(gym.Env):
                 # reward 3: final status: collision, success or restart
                 if collision:
                     done = True
-                    reward = -3000#-1500
+                    #reward = -3000#-1500
                     print("+++++++++++++++++++++ received collision")
                 
                 #TODO: check it
                 if leave_current_mmap == 1:
                     done = True
-                    reward = 500#+500
+                    #reward = 500#+500
                     print("+++++++++++++++++++++ successfully pass current unit")
 
                 elif leave_current_mmap == 2:
