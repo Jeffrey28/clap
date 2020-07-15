@@ -35,7 +35,7 @@ N_S_SAMPLE = 2  # sampling number of target speed
 
 # collision check
 OBSTACLES_CONSIDERED = 3
-ROBOT_RADIUS = 3.5  # robot radius [m]
+#ROBOT_RADIUS = 3.5  # robot radius [m]
 RADIUS_SPEED_RATIO = 0.25 # higher speed, bigger circle
 MOVE_GAP = 1.0
 ONLY_SAMPLE_TO_RIGHT = False
@@ -138,6 +138,12 @@ class Werling(object):
                 Frenetrefy = self.ref_path[:,1]
                 tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
             # initialize prediction module
+            r_x = dynamic_map.jmap.obstacles.dimension.length_x
+            r_z = dynamic_map.jmap.obstacles.dimension.length_z
+            if r_x>r_z:
+                ROBOT_RADIUS = r_x
+            else:
+                ROBOT_RADIUS = r_z
             self.obs_prediction = predict(dynamic_map, OBSTACLES_CONSIDERED, MAXT, DT, ROBOT_RADIUS, RADIUS_SPEED_RATIO, MOVE_GAP,
                                         get_speed(dynamic_map.ego_state))
             
