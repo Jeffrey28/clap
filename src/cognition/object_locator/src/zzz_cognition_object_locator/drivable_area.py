@@ -619,8 +619,6 @@ def calculate_drivable_area(tstates):
             joint_point_x = joint_point[0]
             joint_point_y = joint_point[1]
 
-            print("joint point: ", joint_point_x, joint_point_y)
-
             dist_array = []
             if len(tstates.static_map.drivable_area.points) >= 3:
                 for i in range(len(tstates.static_map.drivable_area.points)):
@@ -631,8 +629,6 @@ def calculate_drivable_area(tstates):
                     dist_array.append(dist_to_joint_point)
 
             joint_point2_index = dist_array.index(min(dist_array)) # the index of the point in drivable area that equals to the joint point
-            print("joint point2 index: ", joint_point2_index)
-            print("joint point2: ", tstates.static_map.drivable_area.points[joint_point2_index].x, tstates.static_map.drivable_area.points[joint_point2_index].y)
         
             key_node_list = []
             for i in range(len(tstates.static_map.drivable_area.points)):
@@ -649,12 +645,7 @@ def calculate_drivable_area(tstates):
         else:
             for i in range(len(tstates.static_map.drivable_area.points)):
                 node_point = tstates.static_map.drivable_area.points[i]
-                print(node_point)
                 key_node_list.append([node_point.x, node_point.y])
-
-        #TODO: 1. Form a key node list, use the key node list to execute the following step
-        # 2. The key node list should be clockwise, but it should be counterclockwise first, to add the points in the next static area
-        # 3. Reverse the key node list
 
         if len(key_node_list) >= 3:
             for i in range(len(key_node_list)):
@@ -884,10 +875,20 @@ def calculate_drivable_area(tstates):
                 del omega_list[j]
                 del flag_list[j]
                 continue
-            if id_list[j] >= 0 and id_list[next_id] != id_list[j]:
+
+            elif id_list[j] == id_list[j-1] and abs(id_list[j] - id_list[next_id]) < 0.5:
+                del angle_list[j]
+                del dist_list[j]
+                del vx_list[j]
+                del vy_list[j]
+                del omega_list[j]
+                del flag_list[j]
+                continue #jxy0715: might not be the most reasonable. This sacrifices accuracy of observation.
+            
+            #if id_list[j] >= 0 and id_list[next_id] != id_list[j]:
                 # velocity of point i means the velocity of the edge between point i and point i+1
-                vx_list[j] = 0
-                vy_list[j] = 0
+                #vx_list[j] = 0 #jxy0713: might confuse the AI.
+                #vy_list[j] = 0
 
         for j in range(len(angle_list)):
             x = ego_x + dist_list[j] * math.cos(angle_list[j])

@@ -41,11 +41,19 @@ class MainDecision(object):
             return None
         dynamic_boundary = self._dynamic_boundary_buffer
 
-        if dynamic_map.model == dynamic_map.MODEL_MULTILANE_MAP:
-            self._trajectory_planner.clear_buff(dynamic_map)
-            return None
-        else:
+        #jxy0715: use rule in false junctions, not training or clearing buff.
+        ego_x = dynamic_map.ego_state.pose.pose.position.x
+        ego_y = dynamic_map.ego_state.pose.pose.position.y
+        if (-55 < ego_x < -45 and 17 < ego_y < 27) or (25 < ego_x < 35 and 25 < ego_y < 35):
+            print("Rule decision in false junction!")
             return self._trajectory_planner.trajectory_update(dynamic_map, dynamic_boundary)
+
+        else:
+            if dynamic_map.model == dynamic_map.MODEL_MULTILANE_MAP:
+                self._trajectory_planner.clear_buff(dynamic_map)
+                return None
+            else:
+                return self._trajectory_planner.trajectory_update(dynamic_map, dynamic_boundary)
 
         
 

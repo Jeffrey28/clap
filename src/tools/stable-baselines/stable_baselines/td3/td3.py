@@ -59,7 +59,7 @@ class TD3(OffPolicyRLModel):
     :param n_cpu_tf_sess: (int) The number of threads for TensorFlow operations
         If None, the number of cpu of the current machine will be used.
     """
-    def __init__(self, policy, env, gamma=0.99, learning_rate=1e-5, buffer_size=50000,
+    def __init__(self, policy, env, gamma=0.99, learning_rate=1e-3, buffer_size=50000,
                  learning_starts=100, train_freq=100, gradient_steps=100, batch_size=256,
                  tau=0.005, policy_delay=2, action_noise=None,
                  target_policy_noise=0.2, target_noise_clip=0.5,
@@ -329,9 +329,11 @@ class TD3(OffPolicyRLModel):
                 # from a uniform distribution for better exploration.
                 # Afterwards, use the learned policy
                 # if random_exploration is set to 0 (normal setting)
+                self.random_exploration = 0.3 * ((total_timesteps - step) / total_timesteps)
                 if self.num_timesteps < self.learning_starts or np.random.rand() < self.random_exploration:
                     # actions sampled from action space are from range specific to the environment
                     # but algorithm operates on tanh-squashed actions therefore simple scaling is used
+                    print("++++++++++++++++++ exploring")
                     unscaled_action = self.env.action_space.sample()
                     action = scale_action(self.action_space, unscaled_action)
                 else:
@@ -374,7 +376,7 @@ class TD3(OffPolicyRLModel):
                             break
                         n_updates += 1
                         # Compute current learning_rate
-                        frac = 1.0 - step / total_timesteps
+                        frac = min(1.0 / pow((step / total_timesteps) * 3600, 0.5), 1)
                         current_lr = self.learning_rate(1) * frac
                         print("current lr:", current_lr)
                         # Update policy and critics (q functions)

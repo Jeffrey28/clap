@@ -84,6 +84,7 @@ class RLSNode(object):
 
 
     def collision_callback(self, msg):
+        print("received collision in rls train!\n\n\n\n\n\n\n\n")
         self._decision_instance._trajectory_planner._collision_signal = True
 
 if __name__ == "__main__":
