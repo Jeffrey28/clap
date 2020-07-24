@@ -107,7 +107,7 @@ class VEG_Planner(object):
             sent_RL_msg = []
             for i in range(80):
                 sent_RL_msg.append([0, 0, 0, 0, 0, 0])
-            sent_RL_msg.append([collision, leave_current_mmap, THRESHOLD, 0, 0, 0])
+            sent_RL_msg.append([collision, leave_current_mmap, THRESHOLD, ego_x, ego_y, 0])
             sent_RL_msg.append([0, 0, 0, 0, 0, 0])
             rospy.loginfo("sent msg length, %d", len(sent_RL_msg))
             self.sock.sendall(msgpack.packb(sent_RL_msg))
@@ -248,56 +248,6 @@ class VEG_Planner(object):
                 #rl_action = [RLpoint.location.x, RLpoint.location.y]
                 rl_q = received_msg[2]
                 rule_q = received_msg[3]
-
-                #jxy0720: add manual braking
-                #TODO: Now 5% failure, can be further improved. Now test whether the model can learn this.
-                reward = 0
-                danger_index = []
-                for i in range(12):
-                    point = sent_RL_msg[i+1]
-                    if point[5] == 0:
-                        continue #empty
-                    point_s = point[0]
-                    point_d = point[1]
-                    point_vs = point[2]
-                    point_vd = point[3]
-                    #those getting far from reference lane are neglected
-                    if (point_d - ego_d) * point_vd > 0: #jxy0721: it seems that the directions of d and vd are different?
-                        danger_index.append(i)
-                    elif abs(point_vd) < 0.1: #static
-                        danger_index.append(i)
-
-                if len(danger_index) != 0:
-                    print("danger index: ", danger_index)
-                    for i in range(len(danger_index)):
-                        point = sent_RL_msg[danger_index[i] + 1]
-                        point_s = point[0]
-                        point_d = point[1]
-                        point_vs = point[2]
-                        point_vd = point[3]
-                        dist = math.sqrt(pow((point_s - ego_s), 2) + pow((point_d - ego_d), 2))
-                        relative_speed = [point_vs - ego_vs, point_vd - ego_vd]
-                        relative_speed_abs = math.sqrt(pow(relative_speed[0], 2) + pow(relative_speed[1], 2))
-                        if ego_s - point_s > 0: #those behind and not quickly approaching
-                            if relative_speed[0] > 3 and ego_s - point_s < 5:
-                                break #should not brake, but go ahead as soon as possible
-                            else:
-                                continue
-                        if abs(point_vd) < 0.2 and abs(point_vs) < 0.2:
-                            if abs(ego_d - point_d) > 1.5:
-                                continue
-
-                        ttc_s = -(point_s - ego_s) / relative_speed[0]
-                        ttc_d = (point_d - ego_d) / relative_speed[1]
-
-                        if dist < 4 or (0 < ttc_s < 2 and 0 < ttc_d < 2) or (0 < ttc_s < 2 and abs(point_d - ego_d) < 2) or (0 < ttc_d < 2 and abs(point_s - ego_s) < 2):
-                            #rl_action[1] = -ACTION_SPACE_SYMMERTY
-                            reward = 1
-                        elif dist < 8:
-                            reward = 2
-                        print("intervene!!!\n\n\n\n")
-                        break
-                
             
                 VEG_trajectory = self.generate_VEG_trajectory(rl_q, rule_q, rl_action, rule_trajectory_msg)
                 #trajectory_points = VEG_trajectory.trajectory.poses
@@ -305,7 +255,7 @@ class VEG_Planner(object):
 
                 # reward: if the vehicle is running out of the drivable area, punish it.
 
-                self.reward_buffer = reward #jxy0709: now the dynamic boundary is not in order, should be adjusted.
+                self.reward_buffer = 0 #jxy0709: now the dynamic boundary is not in order, should be adjusted.
                 print("temp safe...")
 
                 return VEG_trajectory
@@ -460,7 +410,7 @@ class VEG_Planner(object):
 
         # if finish
         leave_current_map = 0
-        state.append([collision, leave_current_map, THRESHOLD, 0, 0, 0])
+        state.append([collision, leave_current_map, THRESHOLD, ego_x, ego_y, 0])
 
         return state
 

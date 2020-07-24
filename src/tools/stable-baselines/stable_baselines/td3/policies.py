@@ -107,7 +107,7 @@ class FeedForwardPolicy(TD3Policy):
         self.cnn_extractor = cnn_extractor
         self.reuse = reuse
         if layers is None:
-            layers = [300, 150, 20]
+            layers = [500, 150, 60, 20]
         self.layers = layers
         print("self.layers: ", self.layers)
 
@@ -127,7 +127,8 @@ class FeedForwardPolicy(TD3Policy):
 
             pi_h = mlp(pi_h, self.layers, self.activ_fn, layer_norm=self.layer_norm)
 
-            self.policy = policy = tf.layers.dense(pi_h, self.ac_space.shape[0], activation=tf.tanh)
+            #jxy0724: tanh activation to get a limited regression result.
+            self.policy = policy = tf.layers.dense(pi_h, self.ac_space.shape[0], activation=None)
 
         return policy
 

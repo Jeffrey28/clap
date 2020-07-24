@@ -191,7 +191,7 @@ class FeedForwardPolicy(SACPolicy):
         self.cnn_extractor = cnn_extractor
         self.reuse = reuse
         if layers is None:
-            layers = [300, 150, 20]
+            layers = [500, 150, 60, 20]
         self.layers = layers
         print("self.layers: ", self.layers)
         self.reg_loss = None

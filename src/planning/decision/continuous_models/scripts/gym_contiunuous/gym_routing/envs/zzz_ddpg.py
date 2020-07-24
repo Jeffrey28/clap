@@ -114,6 +114,8 @@ class ZZZCarlaEnv(gym.Env):
                 collision = received_msg[state_dim][0]
                 leave_current_mmap = received_msg[state_dim][1]
                 threshold = received_msg[state_dim][2]
+                ego_x = received_msg[state_dim][3]
+                ego_y = received_msg[state_dim][4]
                 RLpointx = received_msg[state_dim+1][0]
                 RLpointy = received_msg[state_dim+1][1]
                 input_reward = received_msg[state_dim+1][2]
@@ -125,8 +127,10 @@ class ZZZCarlaEnv(gym.Env):
 
                 # calculate reward:
                 reward = 0
-                #ego_s = self.state[0][0]
+                ego_s = self.state[0][0]
+                ego_d = self.state[0][1]
                 ego_vs = self.state[0][2]
+                ego_vd = self.state[0][3]
 
                 print("+++ rule action: ", RLpointx, RLpointy)
                 print("+++ our action:  ", action[0], action[1])
@@ -151,20 +155,6 @@ class ZZZCarlaEnv(gym.Env):
                 
                 #print("ego_s: ", ego_s)
 
-                '''if ego_vs < 0.1:
-                    self.low_speed_flag = 1
-                    self.low_speed_time = time.time()
-                else:
-                    self.low_speed_flag = 0
-                    self.high_speed_last_time = time.time()
-
-                if self.low_speed_flag == 1 and self.low_speed_time - self.high_speed_last_time > 3:
-                    print("low speed for more than 3s")
-                    if RLpointy > -4:
-                        #jxy0715: if the rule decision is also braking, the punishment will be spared
-                        reward += -10 * (self.low_speed_time - self.high_speed_last_time - 3)
-                        print("low speed reward: ", -10 * (self.low_speed_time - self.high_speed_last_time - 3))'''
-
                 #jxy0716: after the low speed flag is used to judge collision restart, middle low speed escaped punishment.
                 '''if ego_vs < 0.5:
                     self.middle_low_speed_flag = 1
@@ -181,24 +171,88 @@ class ZZZCarlaEnv(gym.Env):
                         print("middle low speed reward: ", -5)'''
 
                 # reward 2: the planned trajectory should be inside the boundary. Calculated in VEG_planner.
-                print("input reward: ", input_reward)
-                if input_reward == 1:
-                    if action[1] > -1:
+                #jxy0720: add manual braking
+                #TODO: Now 5% failure, can be further improved. Now test whether the model can learn this.
+                braking_flag = 0
+                danger_index = []
+                for i in range(12):
+                    point = received_msg[i+1]
+                    if point[5] == 0:
+                        continue #empty
+                    point_s = point[0]
+                    point_d = point[1]
+                    point_vs = point[2]
+                    point_vd = point[3]
+                    #those getting far from reference lane are neglected
+                    if (point_d - ego_d) * point_vd > 0: #jxy0721: it seems that the directions of d and vd are different?
+                        danger_index.append(i)
+                    elif abs(point_vd) < 0.1: #static
+                        danger_index.append(i)
+
+                if len(danger_index) != 0:
+                    for i in range(len(danger_index)):
+                        point = received_msg[danger_index[i] + 1]
+                        point_s = point[0]
+                        point_d = point[1]
+                        point_vs = point[2]
+                        point_vd = point[3]
+                        dist = math.sqrt(pow((point_s - ego_s), 2) + pow((point_d - ego_d), 2))
+                        relative_speed = [point_vs - ego_vs, point_vd - ego_vd]
+                        if ego_s - point_s > 0: #those behind and not quickly approaching
+                            if relative_speed[0] > 3 and ego_s - point_s < 5:
+                                break #should not brake, but go ahead as soon as possible
+                            else:
+                                continue
+                        if abs(point_vd) < 0.2 and abs(point_vs) < 0.2:
+                            if abs(ego_d - point_d) > 1.5:
+                                continue
+
+                        ttc_s = -(point_s - ego_s) / relative_speed[0]
+                        ttc_d = (point_d - ego_d) / relative_speed[1]
+
+                        if dist < 4 or (0 < ttc_s < 2 and 0 < ttc_d < 2) or (0 < ttc_s < 2 and abs(point_d - ego_d) < 2) or (0 < ttc_d < 2 and abs(point_s - ego_s) < 2):
+                            #rl_action[1] = -ACTION_SPACE_SYMMERTY
+                            braking_flag = 1
+                        elif dist < 8:
+                            braking_flag = 2
+                        break
+
+                print("braking flag: ", braking_flag)
+                if braking_flag == 1:
+                    if action[1] > 0:
                         reward += -50
                     else:
-                        reward += 100
-                elif input_reward == 2:
-                    if action[1] > -1:
+                        reward += 100 - 75 * (action[1] + 2.0)
+                elif braking_flag == 2:
+                    if action[1] > 0:
                         reward += -70
-                    elif action[1] > -0.3:
-                        reward += -30
+                    elif action[1] > -1.5:
+                        reward += 70 - 70 * (action[1] + 2.0)
                     else:
-                        reward += 250
+                        reward += 210 - 350 * (action[1] + 2.0)
                 else:
                     if action[1] > 0:
-                        reward += 2
+                        reward += 1.5
+
+                reward = reward * 2
                 
                 print("reward2 = ", reward)
+
+                #low speed reward
+                if ego_vs < 0.1 and braking_flag == 0:
+                    self.low_speed_flag = 1
+                    self.low_speed_time = time.time()
+                else:
+                    self.low_speed_flag = 0
+                    self.high_speed_last_time = time.time()
+
+                if self.low_speed_flag == 1 and self.low_speed_time - self.high_speed_last_time > 3:
+                    print("low speed for more than 3s")
+                    if (braking_flag == 0 and action[1] < 0) or self.low_speed_time - self.high_speed_last_time > 8:
+                        #jxy0715: if the rule decision is also braking, the punishment will be spared
+                        #jxy0724: after 7s, the front vehicle will be removed, if still stop, it will be punished.
+                        reward = -2
+                        print("low speed reward: ", reward)
 
                 # reward 3: final status: collision, success or restart
                 print("collision: ", collision)

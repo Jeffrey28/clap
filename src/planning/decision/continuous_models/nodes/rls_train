@@ -11,7 +11,8 @@ from zzz_planning_decision_continuous_models import MainDecision
 from visualization_msgs.msg import Marker, MarkerArray
 from nav_msgs.msg import Path
 from zzz_planning_msgs.msg import DecisionTrajectory
-from carla_msgs.msg import CarlaCollisionEvent 
+from carla_msgs.msg import CarlaCollisionEvent
+from carla_msgs.msg import CarlaWorldInfo
 
 
 class RLSNode(object):
@@ -39,6 +40,7 @@ class RLSNode(object):
         self._collision_subscriber = rospy.Subscriber("/carla/ego_vehicle/collision", CarlaCollisionEvent, self.collision_callback)
         self._dynamic_map_subscriber = rospy.Subscriber(params.dynamic_map_topic, MapState, self._decision_instance.receive_dynamic_map)
         self._dynamic_boundary_subscriber = rospy.Subscriber(params.dynamic_boundary_topic, DynamicBoundary, self._decision_instance.receive_dynamic_boundary)
+        self._carla_world_info_subscriber = rospy.Subscriber("/carla/world_info", CarlaWorldInfo, self._decision_instance.receive_world_info)
 
         self._rviz_decision_trajectory_publisher = rospy.Publisher(params.RVIZ_decision_trajectory_topic, Path, queue_size=1)
         self._rviz_all_trajectory_publisher = rospy.Publisher(params.RVIZ_all_trajectory_topic, MarkerArray, queue_size=1)

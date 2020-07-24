@@ -7,11 +7,9 @@ from stable_baselines.td3.policies import MlpPolicy
 from stable_baselines.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines import TD3
 
-log_path="/home/carla/ZZZ/data/veg/log/td3_0721_test2"
-load_path="/home/carla/ZZZ/data/veg/models/td3_0721_test2"
-save_path="/home/carla/ZZZ/data/veg/models/td3_0721_test2"
-
-
+log_path="/home/carla/ZZZ/data/veg/log/td3_0724_1"
+load_path="/home/carla/ZZZ/data/veg/models/td3_0724_1"
+save_path="/home/carla/ZZZ/data/veg/models/td3_0724_1"
 
 env = gym.make('zzz-v1')
 
@@ -30,7 +28,7 @@ except:
                 full_tensorboard_log=True, save_path=save_path)
     print("build new model")
 
-model.learn(total_timesteps=10000, log_interval=10)
+model.learn(total_timesteps=72000, log_interval=10)
 model.save(save_path)
 
 #jxy: exit when training ended

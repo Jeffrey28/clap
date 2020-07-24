@@ -59,7 +59,7 @@ class TD3(OffPolicyRLModel):
     :param n_cpu_tf_sess: (int) The number of threads for TensorFlow operations
         If None, the number of cpu of the current machine will be used.
     """
-    def __init__(self, policy, env, gamma=0.99, learning_rate=1e-3, buffer_size=50000,
+    def __init__(self, policy, env, gamma=0.99, learning_rate=5e-4, buffer_size=50000,
                  learning_starts=100, train_freq=100, gradient_steps=100, batch_size=256,
                  tau=0.005, policy_delay=2, action_noise=None,
                  target_policy_noise=0.2, target_noise_clip=0.5,
