@@ -334,14 +334,20 @@ class TD3(OffPolicyRLModel):
                     # actions sampled from action space are from range specific to the environment
                     # but algorithm operates on tanh-squashed actions therefore simple scaling is used
                     print("++++++++++++++++++ exploring")
+                    fw = open("/home/carla/ZZZ/record_rl.txt", 'a')   
+                    fw.write("exploring \n")
+                    fw.close()
                     unscaled_action = self.env.action_space.sample()
                     action = scale_action(self.action_space, unscaled_action)
                 else:
                     action = self.policy_tf.step(obs[None]).flatten()
                     # Add noise to the action, as the policy
                     # is deterministic, this is required for exploration
+                    print("action before noise: ", action)
                     if self.action_noise is not None:
                         action = np.clip(action + self.action_noise(), -1, 1)
+                    print("noise: ", self.action_noise)
+                    print("action after noise: ", action)
                     # Rescale from [-1, 1] to the correct bounds
                     unscaled_action = unscale_action(self.action_space, action)
 

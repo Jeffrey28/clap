@@ -8,12 +8,12 @@ from Werling.trajectory_structure import Frenet_path, Frenet_state
 from zzz_common.kinematics import get_frenet_state
 from zzz_driver_msgs.utils import get_speed, get_yaw
 from common import rviz_display, convert_ndarray_to_pathmsg, convert_path_to_ndarray
-from zzz_common.geometry import dense_polyline2d
+from zzz_common.geometry import dense_polyline2d, dist_from_point_to_closedpolyline2d
 
 
 
 class predict():
-    def __init__(self, dynamic_map, considered_obs_num, maxt, dt, robot_radius, radius_speed_ratio, move_gap, ego_speed):
+    def __init__(self, dynamic_map, dynamic_boundary, considered_obs_num, maxt, dt, robot_radius, radius_speed_ratio, move_gap, ego_speed):
         self.considered_obs_num = considered_obs_num
         self.maxt = maxt
         self.dt = dt
@@ -21,10 +21,14 @@ class predict():
         self.move_gap = move_gap
 
         self.dynamic_map = dynamic_map
+        self.dynamic_boundary = dynamic_boundary
         self.initialze_fail = False
+        self.drivable_area_array = []
 
         self.rviz_collision_checking_circle = None
         self.rivz_element = rviz_display()
+
+        #jxy: environment input here, then each path call the check_collision.
 
         try:
             self.reference_path = self.dynamic_map.jmap.reference_path.map_lane.central_path_points
@@ -32,18 +36,51 @@ class predict():
             self.ref_path = dense_polyline2d(ref_path_ori, 2)
             self.ref_path_tangets = np.zeros(len(self.ref_path))
 
-            self.obs = self.found_closest_obstacles()
-            self.obs_paths = self.prediction_obstacle(self.obs, self.maxt, self.dt)
+            self.drivable_area_array = self.decode(dynamic_boundary)
         except:
             rospy.logdebug("continous module: fail to initialize prediction")
             self.obs_paths = []
+
+    def decode(self, dynamic_boundary):
+        drivable_area_list=[]
+        for i in range(len(dynamic_boundary.boundary)):
+            if dynamic_boundary.boundary[i].flag < 10:
+                point_x=dynamic_boundary.boundary[i].x
+                point_y=dynamic_boundary.boundary[i].y
+                
+                position_point = [point_x, point_y]
+                drivable_area_list.append(position_point)
+        
+        print("drivable area decoded, length ", len(drivable_area_list))
+        return np.array(drivable_area_list)
         
         
     def check_collision(self, fp):
-        if len(self.obs_paths) == 0 or len(fp.t) < 2 :
+        if len(fp.t) < 2 :
             return True
+
+        fp_front = copy.deepcopy(fp)
+        fp_back = copy.deepcopy(fp)
+        try:
+            for t in range(len(fp.yaw)):
+                fp_front.x[t] = fp.x[t] + math.cos(fp.yaw[t]) * self.move_gap
+                fp_front.y[t] = fp.y[t] + math.sin(fp.yaw[t]) * self.move_gap
+                fp_back.x[t] = fp.x[t] - math.cos(fp.yaw[t]) * self.move_gap
+                fp_back.y[t] = fp.y[t] - math.sin(fp.yaw[t]) * self.move_gap
+
+            for t in range(len(fp.t)):
+                #TODO: predict drivable area array
+                dist1, _, _, = dist_from_point_to_closedpolyline2d(fp_front.x[t], fp_front.y[t], self.drivable_area_array)
+                dist2, _, _, = dist_from_point_to_closedpolyline2d(fp_back.x[t], fp_back.y[t], self.drivable_area_array)
+                print("dist1: ", dist1)
+                print("dist2: ", dist2)
+                if dist1 >= 0 or dist2 >= 0:
+                    return False
+        except:
+            pass
             
         # two circles for a vehicle
+        '''
         fp_front = copy.deepcopy(fp)
         fp_back = copy.deepcopy(fp)
         try:
@@ -64,6 +101,8 @@ class predict():
         except:
             pass
             # print("collision check fail",len(fp.yaw),len(fp_back.x),len(fp_front.x))
+        '''
+        #jxy: check collision by dynamic boundary
 
         # self.rviz_collision_checking_circle = self.rivz_element.draw_circles(fp_front, fp_back, self.check_radius)
         return True

@@ -141,8 +141,8 @@ class ZZZCarlaEnv(gym.Env):
                 if RLpointx < -2.0:
                     RLpointx = -2.0
 
-                #punish_angle = min(pow(abs(action[0] - 0), 2), 8)
-                #punish_speed = abs(action[1] - RLpointy)
+                punish_angle = abs(action[0] - RLpointx) #min(pow(abs(action[0] - 0), 2), 8)
+                punish_speed = abs(action[1] - RLpointy)
                 #reward_speed = min(pow(abs(ego_vs), 2), 8)
                 #print("punish angle: ", punish_angle)
                 #print("punish speed: ", punish_speed)
@@ -151,7 +151,7 @@ class ZZZCarlaEnv(gym.Env):
                 #reward += 9 * (15 - punish_angle - punish_speed)
                 #TODO: change reward.
                 # reward 1: he who goes forward should get a reward.
-                #reward = 5 * (15 - punish_angle - punish_speed)
+                #reward = 5 * (5 - punish_angle - punish_speed)
                 
                 #print("ego_s: ", ego_s)
 
@@ -273,9 +273,9 @@ class ZZZCarlaEnv(gym.Env):
                     reward = 0
 
                 print("reward:", reward)
-                reward = reward / 500
+                reward = reward / 1500
                 
-                # self.record_rl_intxt(action, q_value, RLpointx, RLpointy, rule_q, collision, leave_current_mmap, ego_s, threshold)
+                self.record_rl_intxt(action, q_value, RLpointx, RLpointy, rule_q, collision, leave_current_mmap, ego_s, threshold)
                 no_state_flag = 0
                 no_state_start_time = time.time()
                 return np.array(self.state), reward, done,  {}, np.array(self.rule_based_action)
@@ -292,25 +292,25 @@ class ZZZCarlaEnv(gym.Env):
                         break
             
     def record_rl_intxt(self, action, q_value, RLpointx, RLpointy, rule_q, collision, leave_current_mmap, ego_s, threshold):
-        fw = open("/home/carla/openai_baselines_update/zwt_ddpg/test_data/record_rl.txt", 'a')   
-        fw.write(str(action[0]))   
-        fw.write(",")   
-        fw.write(str(action[1]))
-        fw.write(",")   
-        fw.write(str(q_value))
-        fw.write(",")   
-        fw.write(str(RLpointx))
-        fw.write(",")   
-        fw.write(str(RLpointy))
-        fw.write(",")   
-        fw.write(str(rule_q))
-        fw.write(",")   
+        fw = open("/home/carla/ZZZ/record_rl.txt", 'a')   
+        fw.write(str(round(action[0], 2)))   
+        fw.write(", ")   
+        fw.write(str(round(action[1], 2)))
+        fw.write(", ")   
+        fw.write(str(round(q_value, 2)))
+        fw.write(", ")   
+        fw.write(str(round(RLpointx, 2)))
+        fw.write(", ")   
+        fw.write(str(round(RLpointy, 2)))
+        fw.write(", ")   
+        fw.write(str(round(rule_q, 2)))
+        fw.write(", ")   
         fw.write(str(collision))
-        fw.write(",")   
+        fw.write(", ")   
         fw.write(str(leave_current_mmap))
-        fw.write(",")   
-        fw.write(str(ego_s))   
-        fw.write(",")   
+        fw.write(", ")   
+        fw.write(str(round(ego_s, 2)))   
+        fw.write(", ")   
 
         if q_value - rule_q > threshold:
             fw.write("kick in")  

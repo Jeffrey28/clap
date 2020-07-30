@@ -13,7 +13,7 @@ from zzz_navigation_msgs.msg import Lane
 from zzz_driver_msgs.utils import get_speed
 from zzz_cognition_msgs.msg import RoadObstacle
 from zzz_common.kinematics import get_frenet_state
-from zzz_common.geometry import dense_polyline2d
+from zzz_common.geometry import dense_polyline2d, dist_from_point_to_closedpolyline2d
 from zzz_planning_msgs.msg import DecisionTrajectory
 
 from zzz_planning_decision_continuous_models.common import rviz_display, convert_ndarray_to_pathmsg, convert_path_to_ndarray
@@ -80,43 +80,65 @@ class Werling(object):
         self.rivz_element.collision_circle = None
         return None
     
-    def trajectory_update(self, dynamic_map):
-        if self.initialize(dynamic_map):
-            
-            start_state = self.calculate_start_state(dynamic_map)
-            generated_trajectory = self.frenet_optimal_planning(self.csp, self.c_speed, start_state)
+    def trajectory_update(self, dynamic_map, dynamic_boundary):
+        if self.initialize(dynamic_map, dynamic_boundary):
 
-            if generated_trajectory is not None:
-                desired_speed = generated_trajectory.s_d[-1]
-                trajectory_array_ori = np.c_[generated_trajectory.x, generated_trajectory.y]
-                trajectory_array = trajectory_array_ori#dense_polyline2d(trajectory_array_ori,1)
-                self.last_trajectory_array_rule = trajectory_array
-                self.last_trajectory_rule = generated_trajectory              
-                rospy.logdebug("----> Werling: Successful Planning")
+            drivable_area_list=[]
+            for i in range(len(dynamic_boundary.boundary)):
+                if dynamic_boundary.boundary[i].flag < 10:
+                    point_x=dynamic_boundary.boundary[i].x
+                    point_y=dynamic_boundary.boundary[i].y
+                    
+                    position_point = [point_x, point_y]
+                    drivable_area_list.append(position_point)
             
-            elif len(self.last_trajectory_array_rule) > 5 and self.c_speed > 1:
-                trajectory_array = self.last_trajectory_array_rule
-                generated_trajectory = self.last_trajectory_rule
-                desired_speed =  0 
-                rospy.logdebug("----> Werling: Fail to find a solution")
-
+            print("drivable area decoded, length ", len(drivable_area_list))
+            drivable_area_array = np.array(drivable_area_list)
+            ego_x = dynamic_map.ego_state.pose.pose.position.x
+            ego_y = dynamic_map.ego_state.pose.pose.position.y
+            dist_ego1, _, _, = dist_from_point_to_closedpolyline2d(ego_x, ego_y, drivable_area_array)
+            rospy.logdebug("dist to the junction boundary: %f", dist_ego1)
+            if dist_ego1 >= 0: # or dist_ego2 >= 0:
+                #TODO: get the front point and back point from ego state
+                trajectory_array = self.ref_path
+                desired_speed = 0.3
+                rospy.logdebug("----> Werling: Still not inside the junction")
             else:
-                trajectory_array =  self.ref_path
-                desired_speed = 0
-                rospy.logdebug("----> Werling: Output ref path")           
-            
-            msg = DecisionTrajectory()
-            msg.trajectory = convert_ndarray_to_pathmsg(trajectory_array)
-            msg.desired_speed = desired_speed
+                start_state = self.calculate_start_state(dynamic_map)
+                generated_trajectory = self.frenet_optimal_planning(self.csp, self.c_speed, start_state)
 
-            self.rivz_element.candidates_trajectory = self.rivz_element.put_trajectory_into_marker(self.all_trajectory)
-            self.rivz_element.prediciton_trajectory = self.rivz_element.put_trajectory_into_marker(self.obs_prediction.obs_paths)
-            self.rivz_element.collision_circle = self.obs_prediction.rviz_collision_checking_circle
+                if generated_trajectory is not None:
+                    desired_speed = generated_trajectory.s_d[-1]
+                    trajectory_array_ori = np.c_[generated_trajectory.x, generated_trajectory.y]
+                    trajectory_array = trajectory_array_ori#dense_polyline2d(trajectory_array_ori,1)
+                    self.last_trajectory_array_rule = trajectory_array
+                    self.last_trajectory_rule = generated_trajectory              
+                    rospy.logdebug("----> Werling: Successful Planning")
+                
+                elif len(self.last_trajectory_array_rule) > 5 and self.c_speed > 1:
+                    trajectory_array = self.last_trajectory_array_rule
+                    generated_trajectory = self.last_trajectory_rule
+                    desired_speed =  0 
+                    rospy.logdebug("----> Werling: Fail to find a solution")
+
+                else:
+                    trajectory_array =  self.ref_path
+                    desired_speed = 0
+                    rospy.logdebug("----> Werling: Output ref path")           
+                
+                msg = DecisionTrajectory()
+                msg.trajectory = convert_ndarray_to_pathmsg(trajectory_array)
+                msg.desired_speed = desired_speed
+
+                self.rivz_element.candidates_trajectory = self.rivz_element.put_trajectory_into_marker(self.all_trajectory)
+            #self.rivz_element.prediciton_trajectory = self.rivz_element.put_trajectory_into_marker(self.obs_prediction.obs_paths)
+            #self.rivz_element.collision_circle = self.obs_prediction.rviz_collision_checking_circle
+            #TODO: draw prediction with dynamic boundary
             return msg
         else:
             return None
 
-    def initialize(self, dynamic_map):
+    def initialize(self, dynamic_map, dynamic_boundary):
         self._dynamic_map = dynamic_map
         try:
             # estabilish frenet frame
@@ -130,7 +152,7 @@ class Werling(object):
                 Frenetrefy = self.ref_path[:,1]
                 tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
             # initialize prediction module
-            self.obs_prediction = predict(dynamic_map, OBSTACLES_CONSIDERED, MAXT, DT, ROBOT_RADIUS, RADIUS_SPEED_RATIO, MOVE_GAP,
+            self.obs_prediction = predict(dynamic_map, dynamic_boundary, OBSTACLES_CONSIDERED, MAXT, DT, ROBOT_RADIUS, RADIUS_SPEED_RATIO, MOVE_GAP,
                                         get_speed(dynamic_map.ego_state))
             return True
 

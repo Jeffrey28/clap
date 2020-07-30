@@ -3,6 +3,7 @@
 import rospy
 from zzz_common.params import parse_private_args
 from zzz_cognition_msgs.msg import MapState
+from zzz_cognition_msgs.msg import MapState, DynamicBoundary, DynamicBoundaryPoint
 
 from zzz_planning_msgs.msg import DecisionTrajectory
 from nav_msgs.msg import Path 
@@ -21,6 +22,7 @@ class DecisionNode(object):
         params = parse_private_args(
             decision_trajectory_topic="decision_trajectory",
             dynamic_map_topic="/zzz/cognition/local_dynamic_map/map_with_ref",
+            dynamic_boundary_topic="/zzz/cognition/dynamic_boundary",
             RVIZ_decision_trajectory_topic="decision_trajectory_path", 
             RVIZ_all_trajectory_topic="all_trajectory_path", 
             RVIZ_predi_trajectory_topic="predi_trajectory_path", 
@@ -34,6 +36,7 @@ class DecisionNode(object):
 
         # ROS messages
         self._dynamic_map_subscriber = rospy.Subscriber(params.dynamic_map_topic, MapState, self._decision_instance.receive_dynamic_map)
+        self._dynamic_boundary_subscriber = rospy.Subscriber(params.dynamic_boundary_topic, DynamicBoundary, self._decision_instance.receive_dynamic_boundary)
         self._decision_trajectory_publisher = rospy.Publisher(params.decision_trajectory_topic, DecisionTrajectory, queue_size=1)
         
         self._rviz_decision_trajectory_publisher = rospy.Publisher(params.RVIZ_decision_trajectory_topic, Path, queue_size=1)
