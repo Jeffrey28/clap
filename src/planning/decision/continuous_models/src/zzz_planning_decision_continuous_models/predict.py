@@ -52,6 +52,7 @@ class predict():
                 drivable_area_list.append(position_point)
         
         print("drivable area decoded, length ", len(drivable_area_list))
+        print(np.array(drivable_area_list))
         return np.array(drivable_area_list)
         
         
@@ -59,25 +60,50 @@ class predict():
         if len(fp.t) < 2 :
             return True
 
+        #t1 = rospy.get_rostime().to_sec()
+        #print(t1)
+
         fp_front = copy.deepcopy(fp)
         fp_back = copy.deepcopy(fp)
         try:
             for t in range(len(fp.yaw)):
-                fp_front.x[t] = fp.x[t] + math.cos(fp.yaw[t]) * self.move_gap
-                fp_front.y[t] = fp.y[t] + math.sin(fp.yaw[t]) * self.move_gap
+                fp_front.x[t] = fp.x[t] + math.cos(fp.yaw[t]) * self.move_gap #jxy: 1m ahead
+                fp_front.y[t] = fp.y[t] + math.sin(fp.yaw[t]) * self.move_gap #jxy: 1m behind
                 fp_back.x[t] = fp.x[t] - math.cos(fp.yaw[t]) * self.move_gap
                 fp_back.y[t] = fp.y[t] - math.sin(fp.yaw[t]) * self.move_gap
 
+            
             for t in range(len(fp.t)):
                 #TODO: predict drivable area array
-                dist1, _, _, = dist_from_point_to_closedpolyline2d(fp_front.x[t], fp_front.y[t], self.drivable_area_array)
-                dist2, _, _, = dist_from_point_to_closedpolyline2d(fp_back.x[t], fp_back.y[t], self.drivable_area_array)
-                print("dist1: ", dist1)
-                print("dist2: ", dist2)
-                if dist1 >= 0 or dist2 >= 0:
+                dist1, closest_id1, closest_type = dist_from_point_to_closedpolyline2d(fp_front.x[t], fp_front.y[t], self.drivable_area_array)
+                #dist2, closest_id2, _, = dist_from_point_to_closedpolyline2d(fp_back.x[t], fp_back.y[t], self.drivable_area_array)
+                
+                #rospy.logdebug("front path point: %f %f", fp_front.x[t], fp_front.y[t])
+                #rospy.logdebug("fp.yaw[t]: %f", fp.yaw[t])
+                #rospy.logdebug("self.move_gap: %f", self.move_gap)
+                #rospy.logdebug("fp: %f %f", fp.x[t], fp.y[t])
+                #rospy.logdebug("back path point: %f %f", fp_back.x[t], fp_back.y[t])
+                point_flag = self.dynamic_boundary.boundary[closest_id1].flag
+                #rospy.logdebug("point_flag: %d", point_flag)
+                radius = self.check_radius
+                if point_flag == 1: # static boundary part
+                    radius = 1
+
+                #print("check_radius: ", radius)
+                #print("dist1: ", dist1)
+                
+                #print("dist1: ", dist1)
+                #print("dist2: ", dist2)
+                if dist1 <= radius: # or dist2 <= 0:
                     return False
+            
         except:
             pass
+
+        '''t2 = rospy.get_rostime().to_sec()
+        print(t2)
+        time_consume2 = t2 - t1
+        rospy.logdebug("one path collision check time consume: %.6f", time_consume2)'''
             
         # two circles for a vehicle
         '''

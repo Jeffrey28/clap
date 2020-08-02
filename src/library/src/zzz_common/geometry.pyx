@@ -178,7 +178,7 @@ cpdef dist_from_point_to_closedpolyline2d(float x0, float y0, np.ndarray line, b
 
     # Calculate distances mentioned above
     if closest_idx == 0: # When this point is at line start
-        prev_id = -1
+        prev_id = -2 #jxy: the last point is the repeated point of the 0 point.
         next_id = closest_idx + 1
     elif closest_idx == length - 1: # When this point is at end
         prev_id = closest_idx - 1

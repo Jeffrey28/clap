@@ -96,13 +96,32 @@ class Werling(object):
             drivable_area_array = np.array(drivable_area_list)
             ego_x = dynamic_map.ego_state.pose.pose.position.x
             ego_y = dynamic_map.ego_state.pose.pose.position.y
-            dist_ego1, _, _, = dist_from_point_to_closedpolyline2d(ego_x, ego_y, drivable_area_array)
-            rospy.logdebug("dist to the junction boundary: %f", dist_ego1)
-            if dist_ego1 >= 0: # or dist_ego2 >= 0:
+
+            x = dynamic_map.ego_state.pose.pose.orientation.x
+            y = dynamic_map.ego_state.pose.pose.orientation.y
+            z = dynamic_map.ego_state.pose.pose.orientation.z
+            w = dynamic_map.ego_state.pose.pose.orientation.w
+
+            rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
+            rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
+
+            length_arrow = [4, 0, 0]
+            length_arrow_world = np.matmul(rotation_mat_inverse, length_arrow)
+
+            dist_ego1, closest_id1, closest_type1, = dist_from_point_to_closedpolyline2d(ego_x + length_arrow_world[0]/2, ego_y + length_arrow_world[1]/2, drivable_area_array)
+            dist_ego2, closest_id2, closest_type2, = dist_from_point_to_closedpolyline2d(ego_x - length_arrow_world[0]/2, ego_y - length_arrow_world[1]/2, drivable_area_array)
+            rospy.logdebug("current position: %f %f", ego_x, ego_y)
+            rospy.logdebug("length arrow: %f %f", length_arrow_world[0], length_arrow_world[1])
+            rospy.logdebug("front dist to the junction boundary: %f %d %d", dist_ego1, closest_id1, closest_type1)
+            rospy.logdebug("back dist to the junction boundary: %f %d %d", dist_ego2, closest_id2, closest_type2)
+            if dist_ego1 <= 0 or dist_ego2 <= 0:
                 #TODO: get the front point and back point from ego state
-                trajectory_array = self.ref_path
-                desired_speed = 0.3
+                trajectory_array = self.generate_advance_path(ego_x, ego_y, length_arrow_world)
+                desired_speed = 2
                 rospy.logdebug("----> Werling: Still not inside the junction")
+                msg = DecisionTrajectory()
+                msg.trajectory = convert_ndarray_to_pathmsg(trajectory_array)
+                msg.desired_speed = desired_speed
             else:
                 start_state = self.calculate_start_state(dynamic_map)
                 generated_trajectory = self.frenet_optimal_planning(self.csp, self.c_speed, start_state)
@@ -129,6 +148,7 @@ class Werling(object):
                 msg = DecisionTrajectory()
                 msg.trajectory = convert_ndarray_to_pathmsg(trajectory_array)
                 msg.desired_speed = desired_speed
+                rospy.logdebug("desired speed: %f\n", desired_speed)
 
                 self.rivz_element.candidates_trajectory = self.rivz_element.put_trajectory_into_marker(self.all_trajectory)
             #self.rivz_element.prediciton_trajectory = self.rivz_element.put_trajectory_into_marker(self.obs_prediction.obs_paths)
@@ -159,6 +179,16 @@ class Werling(object):
         except:
             rospy.logerror("------> Werling: Initialize fail ")
             return False
+
+    def generate_advance_path(self, ego_x, ego_y, length_arrow_world):
+        trajectory = []
+        trajectory.append([ego_x, ego_y])
+        for i in range(15):
+            trajectory.append([ego_x + 0.1 * i * length_arrow_world[0], ego_y + 0.1 * i * length_arrow_world[1]])
+
+        trajectory_array = np.array(trajectory)
+        print(trajectory_array)
+        return trajectory_array
 
     def calculate_start_state(self, dynamic_map):
         start_state = Frenet_state()
@@ -209,8 +239,10 @@ class Werling(object):
         t3 = rospy.get_rostime().to_sec()
         time_consume3 = t3 - t2
         candidate_len3 = len(fplist)
+        print("t2:", t2)
+        print("t3:", t3)
 
-        rospy.logdebug("frenet time consume step1: %.1f(candidate: %d), step2: %.1f(candidate: %d), step3: %.1f(candidate: %d)",
+        rospy.logdebug("frenet time consume step1: %.2f(candidate: %d), step2: %.2f(candidate: %d), step3: %.2f(candidate: %d)",
                                             time_consume1, candidate_len1,
                                             time_consume2, candidate_len2,
                                             time_consume3, candidate_len3)
@@ -333,6 +365,9 @@ class Werling(object):
         okind = []
         for i, _ in enumerate(fplist):
 
+            print("fplist[i]:")
+            print(fplist[i])
+
             if any([v > MAX_SPEED for v in fplist[i].s_d]):  # Max speed check
                 # rospy.logdebug("exceeding max speed")
                 continue
@@ -343,6 +378,7 @@ class Werling(object):
                 # rospy.logdebug("exceeding max curvature")
                 continue
             if not self.obs_prediction.check_collision(fplist[i]):
+                rospy.loginfo("check collision fail!\n")
                 continue
 
             okind.append(i)

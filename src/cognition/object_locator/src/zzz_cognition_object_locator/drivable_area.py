@@ -877,6 +877,12 @@ def calculate_drivable_area(tstates):
                 continue
 
             elif id_list[j] == id_list[j-1] and abs(id_list[j] - id_list[next_id]) < 0.5:
+                angle_list[next_id] = (angle_list[next_id] + angle_list[j]) / 2
+                if abs(angle_list[next_id] - angle_list[j]) > math.pi:
+                    angle_list[next_id] = angle_list[next_id] + math.pi
+                if angle_list[next_id] > math.pi:
+                    angle_list[next_id] = angle_list[next_id] - 2 * math.pi
+                dist_list[next_id] = (dist_list[next_id] + dist_list[j]) / 2
                 del angle_list[j]
                 del dist_list[j]
                 del vx_list[j]
