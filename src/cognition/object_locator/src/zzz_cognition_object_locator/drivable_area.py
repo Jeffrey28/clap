@@ -43,6 +43,8 @@ def calculate_next_drivable_area(tstates):
         vx_list = []
         vy_list = []
         id_list = []
+        base_x_list = []
+        base_y_list = []
         omega_list = []
         flag_list = []
 
@@ -63,6 +65,8 @@ def calculate_next_drivable_area(tstates):
                         #the velocity of static boundary is 0
                         vx_list.append(0)
                         vy_list.append(0)
+                        base_x_list.append(0)
+                        base_y_list.append(0)
                         omega_list.append(0)
                         flag_list.append(1) #static boundary
                         id_list.append(-1) #static boundary, interp points (can be deleted)
@@ -71,6 +75,8 @@ def calculate_next_drivable_area(tstates):
                 dist_list.append(math.sqrt(pow((node_point.x - ego_x), 2) + pow((node_point.y - ego_y), 2)))
                 vx_list.append(0)
                 vy_list.append(0)
+                base_x_list.append(0)
+                base_y_list.append(0)
                 omega_list.append(0)
                 flag_list.append(1) #static boundary
                 id_list.append(-2) #static boundary, nodes (cannot be deleted)
@@ -181,6 +187,8 @@ def calculate_next_drivable_area(tstates):
                                 angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
                                 vx_list[j] = vx
                                 vy_list[j] = vy
+                                base_x_list[j] = obs_x
+                                base_y_list[j] = obs_y
                                 omega_list[j] = omega
                                 flag_list[j] = 2 #dynamic boundary
                                 id_list[j] = i + id_extra_flag #mark that this point is updated by the ith obstacle
@@ -226,6 +234,8 @@ def calculate_next_drivable_area(tstates):
                                 angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
                                 vx_list[j] = vx
                                 vy_list[j] = vy
+                                base_x_list[j] = obs_x
+                                base_y_list[j] = obs_y
                                 omega_list[j] = omega
                                 flag_list[j] = 2
                                 id_list[j] = i + id_extra_flag
@@ -247,6 +257,8 @@ def calculate_next_drivable_area(tstates):
                     del dist_list[j]
                     del vx_list[j]
                     del vy_list[j]
+                    del base_x_list[j]
+                    del base_y_list[j]
                     del omega_list[j]
                     del flag_list[j]
                     continue
@@ -262,6 +274,8 @@ def calculate_next_drivable_area(tstates):
                         del dist_list[j]
                         del vx_list[j]
                         del vy_list[j]
+                        del base_x_list[j]
+                        del base_y_list[j]
                         del omega_list[j]
                         del flag_list[j]
                         continue
@@ -271,6 +285,8 @@ def calculate_next_drivable_area(tstates):
                 del dist_list[j]
                 del vx_list[j]
                 del vy_list[j]
+                del base_x_list[j]
+                del base_y_list[j]
                 del omega_list[j]
                 del flag_list[j]
                 continue
@@ -284,9 +300,11 @@ def calculate_next_drivable_area(tstates):
             y = ego_y + dist_list[j] * math.sin(angle_list[j])
             vx = vx_list[j]
             vy = vy_list[j]
+            base_x = base_x_list[j]
+            base_y = base_y_list[j]
             omega = omega_list[j]
             flag = flag_list[j]
-            point = [x, y, vx, vy, omega, flag]
+            point = [x, y, vx, vy, base_x, base_y, omega, flag]
             tstates.next_drivable_area.append(point)
         
         #close the figure
@@ -417,10 +435,10 @@ def next_lane_section_points_generation(starts, ends, startvx, startvy, endvx, e
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (smalls - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (smalls - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy, vx_s, vy_s, 0, flag]
+                point = [pointx, pointy, vx_s, vy_s, 0, 0, 0, flag]
                 pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s > smalls and lane_boundaries[j].boundary_point.s < bigs:
-            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0, 0, 1]
+            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0, 0, 0, 0, 1]
             pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s >= bigs:
             if j == 0:
@@ -444,7 +462,7 @@ def next_lane_section_points_generation(starts, ends, startvx, startvy, endvx, e
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy, vx_s, vy_s, 0, flag]
+                point = [pointx, pointy, vx_s, vy_s, 0, 0, 0, flag]
                 pointlist.append(point)
 
     if starts <= ends:
@@ -563,6 +581,8 @@ def calculate_drivable_area(tstates):
         vx_list = []
         vy_list = []
         id_list = []
+        base_x_list = []
+        base_y_list = []
         omega_list = []
         flag_list = []
 
@@ -664,6 +684,8 @@ def calculate_drivable_area(tstates):
                         #the velocity of static boundary is 0
                         vx_list.append(0)
                         vy_list.append(0)
+                        base_x_list.append(0)
+                        base_y_list.append(0)
                         omega_list.append(0)
                         flag_list.append(1) #static boundary
                         id_list.append(-1) #static boundary, interp points (can be deleted)
@@ -672,6 +694,8 @@ def calculate_drivable_area(tstates):
                 dist_list.append(math.sqrt(pow((node_point[0] - ego_x), 2) + pow((node_point[1] - ego_y), 2)))
                 vx_list.append(0)
                 vy_list.append(0)
+                base_x_list.append(0)
+                base_y_list.append(0)
                 omega_list.append(0)
                 flag_list.append(1) #static boundary
                 id_list.append(-2) #static boundary, nodes (cannot be deleted)
@@ -782,6 +806,8 @@ def calculate_drivable_area(tstates):
                                 angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
                                 vx_list[j] = vx
                                 vy_list[j] = vy
+                                base_x_list[j] = obs_x
+                                base_y_list[j] = obs_y
                                 omega_list[j] = omega
                                 flag_list[j] = 2 #dynamic boundary
                                 id_list[j] = i + id_extra_flag #mark that this point is updated by the ith obstacle
@@ -827,6 +853,8 @@ def calculate_drivable_area(tstates):
                                 angle_list[j] = math.atan2(cross_position_y - ego_y, cross_position_x - ego_x) #might slightly differ
                                 vx_list[j] = vx
                                 vy_list[j] = vy
+                                base_x_list[j] = obs_x
+                                base_y_list[j] = obs_y
                                 omega_list[j] = omega
                                 flag_list[j] = 2
                                 id_list[j] = i + id_extra_flag
@@ -848,6 +876,8 @@ def calculate_drivable_area(tstates):
                     del dist_list[j]
                     del vx_list[j]
                     del vy_list[j]
+                    del base_x_list[j]
+                    del base_y_list[j]
                     del omega_list[j]
                     del flag_list[j]
                     continue
@@ -863,6 +893,8 @@ def calculate_drivable_area(tstates):
                         del dist_list[j]
                         del vx_list[j]
                         del vy_list[j]
+                        del base_x_list[j]
+                        del base_y_list[j]
                         del omega_list[j]
                         del flag_list[j]
                         continue
@@ -872,6 +904,8 @@ def calculate_drivable_area(tstates):
                 del dist_list[j]
                 del vx_list[j]
                 del vy_list[j]
+                del base_x_list[j]
+                del base_y_list[j]
                 del omega_list[j]
                 del flag_list[j]
                 continue
@@ -887,6 +921,8 @@ def calculate_drivable_area(tstates):
                 del dist_list[j]
                 del vx_list[j]
                 del vy_list[j]
+                del base_x_list[j]
+                del base_y_list[j]
                 del omega_list[j]
                 del flag_list[j]
                 continue #jxy0715: might not be the most reasonable. This sacrifices accuracy of observation.
@@ -901,9 +937,11 @@ def calculate_drivable_area(tstates):
             y = ego_y + dist_list[j] * math.sin(angle_list[j])
             vx = vx_list[j]
             vy = vy_list[j]
+            base_x = base_x_list[j]
+            base_y = base_y_list[j]
             omega = omega_list[j]
             flag = flag_list[j]
-            point = [x, y, vx, vy, omega, flag]
+            point = [x, y, vx, vy, base_x, base_y, omega, flag]
             tstates.drivable_area.append(point)
         
         #close the figure
@@ -1025,10 +1063,10 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (smalls - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (smalls - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy, vx_s, vy_s, 0, 2]
+                point = [pointx, pointy, vx_s, vy_s, 0, 0, 0, 2]
                 pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s > smalls and lane_boundaries[j].boundary_point.s < bigs:
-            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0, 0, 1]
+            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0, 0, 0, 0, 1]
             pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s >= bigs:
             if j == 0:
@@ -1052,7 +1090,7 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy, vx_s, vy_s, 0, flag]
+                point = [pointx, pointy, vx_s, vy_s, 0, 0, 0, flag]
                 pointlist.append(point)
 
     if starts <= ends:

@@ -137,8 +137,10 @@ class DrivingSpaceConstructor:
             boundary_point.y = drivable_area_point[1]
             boundary_point.vx = drivable_area_point[2]
             boundary_point.vy = drivable_area_point[3]
-            boundary_point.omega = drivable_area_point[4]
-            boundary_point.flag = drivable_area_point[5]
+            boundary_point.base_x = drivable_area_point[4]
+            boundary_point.base_y = drivable_area_point[5]
+            boundary_point.omega = drivable_area_point[6]
+            boundary_point.flag = drivable_area_point[7]
             self.dynamic_boundary.boundary.append(boundary_point)
 
         #TODO: move to drivable area to only keep the lane sections inside the drivable area
@@ -156,6 +158,8 @@ class DrivingSpaceConstructor:
                             lane_point.y = lb.boundary_point.position.y
                             lane_point.vx = 0
                             lane_point.vy = 0
+                            lane_point.base_x = 0
+                            lane_point.base_y = 0
                             lane_point.omega = 0
                             lane_point.flag = 3 + 0.1*i #mark the lane id in flag
                             self.dynamic_boundary.boundary.append(lane_point)
@@ -168,8 +172,10 @@ class DrivingSpaceConstructor:
             boundary_point.y = drivable_area_point[1]
             boundary_point.vx = drivable_area_point[2]
             boundary_point.vy = drivable_area_point[3]
-            boundary_point.omega = drivable_area_point[4]
-            boundary_point.flag = drivable_area_point[5] + 10 #add 10 to mark that it is the next drivable area
+            boundary_point.base_x = drivable_area_point[4]
+            boundary_point.base_y = drivable_area_point[5]
+            boundary_point.omega = drivable_area_point[6]
+            boundary_point.flag = drivable_area_point[7] + 10 #add 10 to mark that it is the next drivable area
             self.dynamic_boundary.boundary.append(boundary_point)
 
         if (tstates.static_map.in_junction):
@@ -184,6 +190,8 @@ class DrivingSpaceConstructor:
                             lane_point.y = lb.boundary_point.position.y
                             lane_point.vx = 0
                             lane_point.vy = 0
+                            lane_point.base_x = 0
+                            lane_point.base_y = 0
                             lane_point.omega = 0
                             lane_point.flag = 3 + 0.1*i + 10 #mark the lane id in flag
                             self.dynamic_boundary.boundary.append(lane_point)

@@ -16,6 +16,7 @@ class rviz_display():
         self.candidates_trajectory = None
         self.prediciton_trajectory = None
         self.collision_circle = None
+        self.predi_boundary = None
     
     def put_trajectory_into_marker(self, fplist):
         if fplist is None or len(fplist)<1:
@@ -48,6 +49,35 @@ class rviz_display():
             return tempmarkerarray
         except:
             return None
+
+    def draw_predi_boundary(self, dynamic_boundary_list):
+
+        print("draw dynamic boundary, list length: ", len(dynamic_boundary_list))
+        predi_boundary = dynamic_boundary_list[1]
+            
+        tempmarker = Marker() #jxy: must be put inside since it is python
+        tempmarker.header.frame_id = "map"
+        tempmarker.header.stamp = rospy.Time.now()
+        tempmarker.ns = "zzz/decision"
+        tempmarker.id = 1
+        tempmarker.type = Marker.LINE_STRIP
+        tempmarker.action = Marker.ADD
+        tempmarker.scale.x = 0.20
+        tempmarker.color.r = 0.0
+        tempmarker.color.g = 0.0
+        tempmarker.color.b = 1.0
+        tempmarker.color.a = 0.5
+        tempmarker.lifetime = rospy.Duration(0.5)
+
+        for i in range(len(predi_boundary)):
+            point = predi_boundary[i]
+            p = Point()
+            p.x = point[0]
+            p.y = point[1]
+            p.z = 0 #TODO: the map does not provide z value
+            tempmarker.points.append(p)
+        
+        return tempmarker
 
     def draw_circles(self, fp1, fp2, radius):
         if fp1 is None or fp2 is None:

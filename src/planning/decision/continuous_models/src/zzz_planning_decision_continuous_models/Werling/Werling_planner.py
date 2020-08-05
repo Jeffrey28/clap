@@ -26,8 +26,8 @@ MAX_CURVATURE = 500.0  # maximum curvature [1/m]
 MAX_ROAD_WIDTH = 6.0   # maximum road width [m] # related to RL action space
 D_ROAD_W = 1.5  # road width sampling length [m]
 DT = 0.3  # time tick [s]
-MAXT = 4.6  # max prediction time [m]
-MINT = 4.0  # min prediction time [m]
+MAXT = 2.6  # max prediction time [m]
+MINT = 2.0  # min prediction time [m]
 TARGET_SPEED = 15.0 / 3.6  # target speed [m/s]
 D_T_S = 5.0 / 3.6  # target speed sampling length [m/s]
 N_S_SAMPLE = 2  # sampling number of target speed
@@ -78,9 +78,11 @@ class Werling(object):
         self.rivz_element.candidates_trajectory = None
         self.rivz_element.prediciton_trajectory = None
         self.rivz_element.collision_circle = None
+        self.rivz_element.predi_boundary = None
         return None
     
     def trajectory_update(self, dynamic_map, dynamic_boundary):
+        print("we are here, updating trajectory")
         if self.initialize(dynamic_map, dynamic_boundary):
 
             drivable_area_list=[]
@@ -109,7 +111,7 @@ class Werling(object):
             length_arrow_world = np.matmul(rotation_mat_inverse, length_arrow)
 
             dist_ego1, closest_id1, closest_type1, = dist_from_point_to_closedpolyline2d(ego_x + length_arrow_world[0]/2, ego_y + length_arrow_world[1]/2, drivable_area_array)
-            dist_ego2, closest_id2, closest_type2, = dist_from_point_to_closedpolyline2d(ego_x - length_arrow_world[0]/2, ego_y - length_arrow_world[1]/2, drivable_area_array)
+            dist_ego2, closest_id2, closest_type2, = dist_from_point_to_closedpolyline2d(ego_x, ego_y, drivable_area_array)
             rospy.logdebug("current position: %f %f", ego_x, ego_y)
             rospy.logdebug("length arrow: %f %f", length_arrow_world[0], length_arrow_world[1])
             rospy.logdebug("front dist to the junction boundary: %f %d %d", dist_ego1, closest_id1, closest_type1)
@@ -153,6 +155,7 @@ class Werling(object):
                 self.rivz_element.candidates_trajectory = self.rivz_element.put_trajectory_into_marker(self.all_trajectory)
             #self.rivz_element.prediciton_trajectory = self.rivz_element.put_trajectory_into_marker(self.obs_prediction.obs_paths)
             #self.rivz_element.collision_circle = self.obs_prediction.rviz_collision_checking_circle
+            self.rivz_element.predi_boundary = self.obs_prediction.rviz_predi_boundary
             #TODO: draw prediction with dynamic boundary
             return msg
         else:
@@ -160,25 +163,25 @@ class Werling(object):
 
     def initialize(self, dynamic_map, dynamic_boundary):
         self._dynamic_map = dynamic_map
-        try:
-            # estabilish frenet frame
-            if self.csp is None:
-                self.reference_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
-                ref_path_ori = convert_path_to_ndarray(self.reference_path)
-                self.ref_path = dense_polyline2d(ref_path_ori, 2)
-                self.ref_path_tangets = np.zeros(len(self.ref_path))
+        #try:
+        # estabilish frenet frame
+        if self.csp is None:
+            self.reference_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
+            ref_path_ori = convert_path_to_ndarray(self.reference_path)
+            self.ref_path = dense_polyline2d(ref_path_ori, 2)
+            self.ref_path_tangets = np.zeros(len(self.ref_path))
 
-                Frenetrefx = self.ref_path[:,0]
-                Frenetrefy = self.ref_path[:,1]
-                tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
-            # initialize prediction module
-            self.obs_prediction = predict(dynamic_map, dynamic_boundary, OBSTACLES_CONSIDERED, MAXT, DT, ROBOT_RADIUS, RADIUS_SPEED_RATIO, MOVE_GAP,
-                                        get_speed(dynamic_map.ego_state))
-            return True
+            Frenetrefx = self.ref_path[:,0]
+            Frenetrefy = self.ref_path[:,1]
+            tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
+        # initialize prediction module
+        self.obs_prediction = predict(dynamic_map, dynamic_boundary, OBSTACLES_CONSIDERED, MAXT, DT, ROBOT_RADIUS, RADIUS_SPEED_RATIO, MOVE_GAP,
+                                    get_speed(dynamic_map.ego_state))
+        return True
 
-        except:
-            rospy.logerror("------> Werling: Initialize fail ")
-            return False
+        #except:
+        #    rospy.logerror("------> Werling: Initialize fail ")
+        #    return False
 
     def generate_advance_path(self, ego_x, ego_y, length_arrow_world):
         trajectory = []
@@ -364,9 +367,6 @@ class Werling(object):
     def check_paths(self, fplist):
         okind = []
         for i, _ in enumerate(fplist):
-
-            print("fplist[i]:")
-            print(fplist[i])
 
             if any([v > MAX_SPEED for v in fplist[i].s_d]):  # Max speed check
                 # rospy.logdebug("exceeding max speed")

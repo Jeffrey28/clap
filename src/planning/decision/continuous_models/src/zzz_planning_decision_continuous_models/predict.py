@@ -26,29 +26,40 @@ class predict():
         self.drivable_area_array = []
 
         self.rviz_collision_checking_circle = None
+        self.rviz_predi_boundary = None
         self.rivz_element = rviz_display()
 
         #jxy: environment input here, then each path call the check_collision.
 
-        try:
-            self.reference_path = self.dynamic_map.jmap.reference_path.map_lane.central_path_points
-            ref_path_ori = convert_path_to_ndarray(self.reference_path)
-            self.ref_path = dense_polyline2d(ref_path_ori, 2)
-            self.ref_path_tangets = np.zeros(len(self.ref_path))
+        #try:
+        self.reference_path = self.dynamic_map.jmap.reference_path.map_lane.central_path_points
+        ref_path_ori = convert_path_to_ndarray(self.reference_path)
+        self.ref_path = dense_polyline2d(ref_path_ori, 2)
+        self.ref_path_tangets = np.zeros(len(self.ref_path))
 
-            self.drivable_area_array = self.decode(dynamic_boundary)
-        except:
-            rospy.logdebug("continous module: fail to initialize prediction")
-            self.obs_paths = []
+        ego_x = dynamic_map.ego_state.pose.pose.position.x
+        ego_y = dynamic_map.ego_state.pose.pose.position.y
+
+        self.drivable_area_array = self.decode(dynamic_boundary)
+        self.drivable_area_array_list = self.predict_dynamic_boundary(self.drivable_area_array, maxt, dt, ego_x, ego_y)
+        #except:
+        #    rospy.logdebug("continous module: fail to initialize prediction")
+        #    self.drivable_area_array_list = []
 
     def decode(self, dynamic_boundary):
         drivable_area_list=[]
         for i in range(len(dynamic_boundary.boundary)):
             if dynamic_boundary.boundary[i].flag < 10:
-                point_x=dynamic_boundary.boundary[i].x
-                point_y=dynamic_boundary.boundary[i].y
+                point_x = dynamic_boundary.boundary[i].x
+                point_y = dynamic_boundary.boundary[i].y
+                point_vx = dynamic_boundary.boundary[i].vx
+                point_vy = dynamic_boundary.boundary[i].vy
+                point_base_x = dynamic_boundary.boundary[i].base_x
+                point_base_y = dynamic_boundary.boundary[i].base_y
+                point_omega = dynamic_boundary.boundary[i].omega
+                point_flag = dynamic_boundary.boundary[i].flag
                 
-                position_point = [point_x, point_y]
+                position_point = [point_x, point_y, point_vx, point_vy, point_base_x, point_base_y, point_omega, point_flag]
                 drivable_area_list.append(position_point)
         
         print("drivable area decoded, length ", len(drivable_area_list))
@@ -71,11 +82,31 @@ class predict():
                 fp_front.y[t] = fp.y[t] + math.sin(fp.yaw[t]) * self.move_gap #jxy: 1m behind
                 fp_back.x[t] = fp.x[t] - math.cos(fp.yaw[t]) * self.move_gap
                 fp_back.y[t] = fp.y[t] - math.sin(fp.yaw[t]) * self.move_gap
+                
+            drivable_area_array0 = self.drivable_area_array_list[0]
+            #print("drivable_area_array:", drivable_area_array)
+            temp_list = []
+            for i in range(len(drivable_area_array0)):
+                pointx = drivable_area_array0[i][0]
+                pointy = drivable_area_array0[i][1]
+                temp_list.append([pointx, pointy])
 
+            drivable_area_array0_xy = np.array(temp_list)
             
             for t in range(len(fp.t)):
                 #TODO: predict drivable area array
-                dist1, closest_id1, closest_type = dist_from_point_to_closedpolyline2d(fp_front.x[t], fp_front.y[t], self.drivable_area_array)
+                drivable_area_array = self.drivable_area_array_list[t]
+                #print("drivable_area_array:", drivable_area_array)
+                temp_list = []
+                for i in range(len(drivable_area_array)):
+                    pointx = drivable_area_array[i][0]
+                    pointy = drivable_area_array[i][1]
+                    temp_list.append([pointx, pointy])
+
+                drivable_area_array_xy = np.array(temp_list)
+                dist1, closest_id1, _, = dist_from_point_to_closedpolyline2d(fp_front.x[t], fp_front.y[t], drivable_area_array_xy)
+                dist0, closest_id0, _, = dist_from_point_to_closedpolyline2d(fp_front.x[t], fp_front.y[t], drivable_area_array0_xy)
+                #TODO: fix the bug in the future, now use current boundary to correct
                 #dist2, closest_id2, _, = dist_from_point_to_closedpolyline2d(fp_back.x[t], fp_back.y[t], self.drivable_area_array)
                 
                 #rospy.logdebug("front path point: %f %f", fp_front.x[t], fp_front.y[t])
@@ -83,22 +114,33 @@ class predict():
                 #rospy.logdebug("self.move_gap: %f", self.move_gap)
                 #rospy.logdebug("fp: %f %f", fp.x[t], fp.y[t])
                 #rospy.logdebug("back path point: %f %f", fp_back.x[t], fp_back.y[t])
-                point_flag = self.dynamic_boundary.boundary[closest_id1].flag
+                #jxy: hopefully this is the last bug to deal with.
+                #TODO: there are sometimes the self circling problem, hopefully I can solve it in the future.
+                point_flag = drivable_area_array[closest_id1][7]
                 #rospy.logdebug("point_flag: %d", point_flag)
                 radius = self.check_radius
                 if point_flag == 1: # static boundary part
                     radius = 1
+
+                point_flag = drivable_area_array0[closest_id0][7]
+                #rospy.logdebug("point_flag: %d", point_flag)
+                radius0 = self.check_radius
+                if point_flag == 1: # static boundary part
+                    radius0 = 1
 
                 #print("check_radius: ", radius)
                 #print("dist1: ", dist1)
                 
                 #print("dist1: ", dist1)
                 #print("dist2: ", dist2)
-                if dist1 <= radius: # or dist2 <= 0:
+                if dist1 <= radius or dist0 <= radius0:
+                    print("collision time: dynamic_boundary_p: ", drivable_area_array)
+                    print("collision time: front point x: ", fp_front.x[t])
+                    print("collision time: front point y: ", fp_front.y[t])
                     return False
             
         except:
-            pass
+            return False #jxy: when it cannot judge whether there will be a collision or not, why should it pass the test?
 
         '''t2 = rospy.get_rostime().to_sec()
         print(t2)
@@ -195,5 +237,392 @@ class predict():
 
         return obs_paths
 
-    
+    def predict_dynamic_boundary(self, dynamic_boundary_array, maxt, delta_t, ego_x, ego_y):
+        
+        dynamic_boundary_list = []
+        
+        steps = int(maxt / delta_t)
+        rospy.logdebug("steps: %d", steps)
 
+        dynamic_boundary = list(dynamic_boundary_array)
+
+        for ii in range(steps):
+            dt = ii * delta_t
+
+            #step 1: reconstruct static boundary
+            static_boundary = copy.deepcopy(dynamic_boundary)
+            for i in range(len(dynamic_boundary)):
+                j = len(dynamic_boundary) - 1 - i
+                if static_boundary[j][7] == 2:
+                    del static_boundary[j]
+
+            if len(dynamic_boundary) == 0:
+                # no dynamic boundary
+                break
+
+            if dynamic_boundary[0][7] == 2: #the close point is dynamic thus deleted in static boundary
+                static_boundary.append(static_boundary[0])
+
+            # step 2: predict moving obstacles
+            # step 2-1: decode the moving obstacles in t0
+            #print("dynamic_boundary: ", dynamic_boundary)
+            base_x_buffer = -1
+            base_y_buffer = -1
+            count_corner = 0
+            count_obs = 0
+            rec_obs = []
+            rec_obs_list = []
+            for j in range(len(dynamic_boundary)):
+                if dynamic_boundary[j][7] == 2:
+                    #print("j: ", j)
+                    # check base point
+                    pointbasex = dynamic_boundary[j][5]
+                    pointbasey = dynamic_boundary[j][6]
+                    if base_x_buffer == -1 and base_y_buffer == -1:
+                        count_corner = 1 #initialize
+                        count_obs = 1
+                        base_x_buffer = pointbasex
+                        base_y_buffer = pointbasey
+                        rec_obs.append(list(dynamic_boundary[j]))
+                        #print("rec_obs: ", rec_obs)
+                    elif base_x_buffer == pointbasex and base_y_buffer == pointbasey:
+                        count_corner = count_corner + 1
+                        rec_obs.append(list(dynamic_boundary[j]))
+                        #print("rec_obs: ", rec_obs)
+                    else:
+                        # change to another obs
+                        #print("change to another obs")
+                        count_corner = 1
+                        base_x_buffer = pointbasex
+                        base_y_buffer = pointbasey
+                        rec_obs_list.append(rec_obs)
+                        rec_obs = []
+                        count_obs = count_obs + 1
+                        rec_obs.append(list(dynamic_boundary[j]))
+                        #print("rec_obs: ", rec_obs)
+
+            if len(rec_obs) != 0:
+                rec_obs_list.append(rec_obs)
+            '''if len(rec_obs_list) > 0:
+                print("rec obs list: ", rec_obs_list)
+            else:
+                print("no obstacles in the junction")'''
+
+            if len(rec_obs_list) != 1 and len(rec_obs_list) != 0:
+                if rec_obs_list[0][0][4] == rec_obs_list[-1][0][4] and rec_obs_list[0][0][5] == rec_obs_list[-1][0][5]:
+                    # the two are from one obstacle
+                    last_rec_obs = rec_obs_list[-1]
+                    first_rec_obs = rec_obs_list[0]
+                    last_rec_obs.extend(first_rec_obs)
+                    rec_obs_list[-1] = last_rec_obs
+                    del rec_obs_list[0]
+            
+            # step 2-2: predict the moving obstacles, and modify by angle (regaining three corners)
+            for i in range(len(rec_obs_list)):
+                rec_obs = copy.deepcopy(rec_obs_list[i])
+                corner_list_angle = []
+                corner_list_dist = []
+                for j in range(len(rec_obs)):
+                    x = rec_obs[j][0]
+                    y = rec_obs[j][1]
+                    vx = rec_obs[j][2]
+                    vy = rec_obs[j][3]
+                    base_x = rec_obs[j][4]
+                    base_y = rec_obs[j][5]
+                    omega = rec_obs[j][6]
+                    x_pv = x + vx * dt
+                    y_pv = y + vy * dt
+                    base_x = base_x + vx * dt
+                    base_y = base_y + vy * dt
+                    # rotate around base point
+                    theta0 = math.atan2(y_pv - base_y, x_pv - base_x) + omega * dt
+                    dist0 = np.linalg.norm([x_pv - base_x, y_pv - base_y])
+                    x_p = base_x + dist0 * math.cos(theta0)
+                    y_p = base_y + dist0 * math.sin(theta0)
+                    rec_obs[j][0] = x_p
+                    rec_obs[j][1] = y_p
+                    corner_list_angle.append(math.atan2(y_p - ego_y, x_p - ego_x))
+                    corner_list_dist.append(np.linalg.norm([x_p - ego_x, y_p - ego_y]))
+                
+                #print("predicted rec_obs: ", rec_obs)
+
+                # reconstruct full obstacle and sort by angle
+                if len(rec_obs) > 3: #TODO: fix it in drivable_area. Now only get 3 points if there are more than 3.
+                    halfway = int(round(len(rec_obs)/2))
+                    rec_obs_temp = copy.deepcopy(rec_obs[0])
+                    temp1 = copy.deepcopy(rec_obs[halfway])
+                    rec_obs_temp.append(temp1)
+                    temp2 = copy.deepcopy(rec_obs[-1])
+                    rec_obs_temp.append(temp2)
+
+                if len(rec_obs) == 3:
+                    point4_x = 2 * base_x - rec_obs[1][0]
+                    point4_y = 2 * base_y - rec_obs[1][1]
+                    corner_list_angle.append(math.atan2(point4_y - ego_y, point4_x - ego_x))
+                    corner_list_dist.append(np.linalg.norm([point4_x - ego_x, point4_y - ego_y]))
+                    temp = copy.deepcopy(rec_obs[-1])
+                    rec_obs.append(temp)
+                    rec_obs[3][0] = point4_x
+                    rec_obs[3][1] = point4_y
+                elif len(rec_obs) == 2:
+                    point3_x = 2 * base_x - rec_obs[0][0]
+                    point3_y = 2 * base_y - rec_obs[0][1]
+                    corner_list_angle.append(math.atan2(point3_y - ego_y, point3_x - ego_x))
+                    corner_list_dist.append(np.linalg.norm([point3_x - ego_x, point3_y - ego_y]))
+                    #jxy: again sanctioned by python list copy.
+                    temp = copy.deepcopy(rec_obs[-1])
+                    rec_obs.append(temp)
+                    rec_obs[2][0] = point3_x
+                    rec_obs[2][1] = point3_y
+
+                    point4_x = 2 * base_x - rec_obs[1][0]
+                    point4_y = 2 * base_y - rec_obs[1][1]
+                    corner_list_angle.append(math.atan2(point4_y - ego_y, point4_x - ego_x))
+                    corner_list_dist.append(np.linalg.norm([point4_x - ego_x, point4_y - ego_y]))
+                    temp = copy.deepcopy(rec_obs[-1])
+                    rec_obs.append(temp)
+                    rec_obs[3][0] = point4_x
+                    rec_obs[3][1] = point4_y
+                else:
+                    continue # illegal obstacle (e.g. only one point)
+
+                #print("constructed full obstacle: ", rec_obs)
+
+                small_corner_id = np.argmin(corner_list_angle)
+                big_corner_id = np.argmax(corner_list_angle)
+
+                if corner_list_angle[big_corner_id] - corner_list_angle[small_corner_id] > math.pi:
+                    #cross pi
+                    for j in range(4):
+                        if corner_list_angle[j] < 0:
+                            corner_list_angle[j] += 2 * math.pi
+
+                small_corner_id = np.argmin(corner_list_angle)
+                big_corner_id = np.argmax(corner_list_angle)
+
+                # add middle corner if we can see 3 corners
+                smallest_dist_id = np.argmin(corner_list_dist)
+                middle_corner_id = -1
+                if not (small_corner_id == smallest_dist_id or big_corner_id == smallest_dist_id):
+                    middle_corner_id = smallest_dist_id
+
+                rec_obs_new = []
+                rec_obs_new.append(rec_obs[small_corner_id])
+                if middle_corner_id != -1:
+                    rec_obs_new.append(rec_obs[middle_corner_id])
+                rec_obs_new.append(rec_obs[big_corner_id])
+
+                #print("rec_obs_new: ", rec_obs_new)
+
+                rec_obs_list[i] = rec_obs_new
+
+            #print("rec_obs_list final version:", rec_obs_list)
+
+            # step 3: construct the predicted boundary combining the last 2 steps
+            # jxy: the angle order is different from matlab test, so reverse it
+            static_boundary.reverse()
+            #print("static boundary length: ", len(static_boundary))
+            dynamic_boundary_p = copy.deepcopy(static_boundary)
+            del dynamic_boundary_p[-1]
+            angle_list_p = []
+            dist_list_p = []
+            for i in range(len(static_boundary) - 1):
+                angle_list_p.append(math.atan2(static_boundary[i][1] - ego_y, static_boundary[i][0] - ego_x))
+                dist_list_p.append(np.linalg.norm([static_boundary[i][1] - ego_y, static_boundary[i][0] - ego_x]))
+
+            # notice that the farther ones should be considered in advance, or else the
+            # shadow will not be handled correctly.
+            # TODO: may still have some bugs in small probability, when a farther
+            # obstacle blocked the sight of a nearer obstacle due to orientation, or
+            # two dists are equal.
+
+            center_x_list = []
+            center_y_list = []
+            center_dist_list = []
+            for i in range(len(rec_obs_list)):
+                center_x_list.append(rec_obs_list[i][0][3])
+                center_y_list.append(rec_obs_list[i][0][4])
+                center_dist_list.append(np.linalg.norm([center_x_list[i] - ego_x, center_y_list[i] - ego_y]))
+
+            center_dist_list_sort = copy.deepcopy(center_dist_list)
+            center_dist_list_sort.sort()
+            rec_obs_list_temp = []
+            for i in range(len(rec_obs_list)):
+                m = center_dist_list.index(center_dist_list_sort[len(rec_obs_list) - 1 - i])
+                rec_obs_list_temp.append(rec_obs_list[m])
+            rec_obs_list = rec_obs_list_temp
+
+            #print("angle_list_p length: ", len(angle_list_p))
+            #print("dynamic_boundary_p length: ", len(dynamic_boundary_p))
+
+            for i in range(len(rec_obs_list)):
+                continue_flag = 0
+
+                rec_obs = rec_obs_list[i]
+                small_x = rec_obs[0][0]
+                small_y = rec_obs[0][1]
+                big_x = rec_obs[-1][0]
+                big_y = rec_obs[-1][1]
+
+                small_angle = math.atan2(small_y - ego_y, small_x - ego_x)
+                big_angle = math.atan2(big_y - ego_y, big_x - ego_x)
+                if small_angle > math.pi:
+                    small_angle = small_angle + 2 * math.pi
+                if big_angle > math.pi:
+                    big_angle = big_angle - 2 * math.pi
+
+                small_dist = np.linalg.norm(np.array([small_x - ego_x, small_y - ego_y]))
+                big_dist = np.linalg.norm(np.array([big_x - ego_x, big_y - ego_y]))
+
+                # create small angle and big angle shadow point
+                small_cross_point_x = 0
+                small_cross_point_y = 0
+                big_cross_point_x = 0
+                big_cross_point_y = 0
+                small_wall_id = 0
+                big_wall_id = 0
+
+                #print("dynamic_boundary_p length: ", len(dynamic_boundary_p))
+                #print("angle_list_p length: ", len(angle_list_p))
+                #print("dist_list_p length: ", len(dist_list_p))
+
+                for j in range(len(dynamic_boundary_p)):
+                    next_id = j + 1
+                    if next_id >= len(dynamic_boundary_p):
+                        next_id = 0
+
+                    '''print("j: ",j)
+                    print("next_id: ", next_id)
+                    print("dynamic_boundary_p length: ", len(dynamic_boundary_p))
+                    print("angle_list_p length: ", len(angle_list_p))
+                    print("dist_list_p length: ", len(dist_list_p))'''
+
+                    if ((small_angle>angle_list_p[j] and small_angle-angle_list_p[j]<=math.pi) or (small_angle<=angle_list_p[j] and angle_list_p[j]-small_angle>=math.pi)) and \
+                        ((small_angle<=angle_list_p[next_id] and angle_list_p[next_id]-small_angle<=math.pi) or (small_angle>angle_list_p[next_id] and small_angle-angle_list_p[next_id]>=math.pi)):
+                        wall_id = j
+                        wall2_id = next_id
+                        wall_x = dynamic_boundary_p[wall_id][0]
+                        wall_y = dynamic_boundary_p[wall_id][1]
+                        wall2_x = dynamic_boundary_p[wall2_id][0]
+                        wall2_y = dynamic_boundary_p[wall2_id][1]
+                        egosmall_normal = np.array([-(ego_y - small_y), ego_x - small_x]) / np.linalg.norm(np.array([-(ego_y - small_y), ego_x - small_x]))
+                        small_wall_id = wall_id
+
+                        # cross point
+                        dist_wall_egosmall = np.inner(np.array([wall_x - ego_x, wall_y - ego_y]), egosmall_normal)
+                        dist_wall2_egosmall = np.inner(np.array([wall2_x - ego_x, wall2_y - ego_y]), egosmall_normal)
+                        small_cross_point_x = wall_x + (wall2_x - wall_x) / (abs(dist_wall_egosmall) + abs(dist_wall2_egosmall)) * abs(dist_wall_egosmall)
+                        small_cross_point_y = wall_y + (wall2_y - wall_y) / (abs(dist_wall_egosmall) + abs(dist_wall2_egosmall)) * abs(dist_wall_egosmall)
+                        small_cross_point_dist = np.linalg.norm([small_cross_point_x - ego_x, small_cross_point_y - ego_y])
+                        if small_cross_point_dist < small_dist:
+                            continue_flag = 1
+                    if ((big_angle>angle_list_p[j] and big_angle-angle_list_p[j]<=math.pi) or (big_angle<=angle_list_p[j] and angle_list_p[j]-big_angle>=math.pi)) and \
+                        ((big_angle<=angle_list_p[next_id] and angle_list_p[next_id]-big_angle<=math.pi) or (big_angle>angle_list_p[next_id] and big_angle-angle_list_p[next_id]>=math.pi)):
+                        wall_id = j
+                        wall2_id = next_id
+                        wall_x = dynamic_boundary_p[wall_id][0]
+                        wall_y = dynamic_boundary_p[wall_id][1]
+                        wall2_x = dynamic_boundary_p[wall2_id][0]
+                        wall2_y = dynamic_boundary_p[wall2_id][1]
+                        egobig_normal = np.array([-(ego_y - big_y), ego_x - big_x]) / np.linalg.norm(np.array([-(ego_y - big_y), ego_x - big_x]))
+                        big_wall_id = wall_id
+
+                        # cross point
+                        dist_wall_egobig = np.inner(np.array([wall_x - ego_x, wall_y - ego_y]), egobig_normal)
+                        dist_wall2_egobig = np.inner(np.array([wall2_x - ego_x, wall2_y - ego_y]), egobig_normal)
+                        big_cross_point_x = wall_x + (wall2_x - wall_x) / (abs(dist_wall_egobig) + abs(dist_wall2_egobig)) * abs(dist_wall_egobig)
+                        big_cross_point_y = wall_y + (wall2_y - wall_y) / (abs(dist_wall_egobig) + abs(dist_wall2_egobig)) * abs(dist_wall_egobig)
+                        big_cross_point_dist = np.linalg.norm([big_cross_point_x - ego_x, big_cross_point_y - ego_y])
+                        if big_cross_point_dist < big_dist:
+                            continue_flag = 1
+
+                if continue_flag == 1:
+                    continue
+                
+                # remove the points between the cross points (if any, in increasing order
+                #print("angle_list_p: ", angle_list_p)
+                #print("small wall id: ", small_wall_id)
+                #print("big_wall_id: ", big_wall_id)
+                if big_wall_id > small_wall_id:
+                    # delete: small_wall_id + 1 to big_wall_id (+ 1 in python)
+                    del dynamic_boundary_p[(small_wall_id + 1):(big_wall_id + 1)]
+                    del angle_list_p[(small_wall_id + 1):(big_wall_id + 1)]
+                    del dist_list_p[(small_wall_id + 1):(big_wall_id + 1)]
+                elif big_wall_id < small_wall_id:
+                    # delete: small_wall_id to the last, the first to big_wall_id (+ 1 in python)
+                    if small_wall_id != len(dynamic_boundary_p) - 1:
+                        del dynamic_boundary_p[(small_wall_id + 1):len(dynamic_boundary_p)]
+                        del angle_list_p[(small_wall_id + 1):len(angle_list_p)]
+                        del dist_list_p[(small_wall_id + 1):len(angle_list_p)]
+                    del dynamic_boundary_p[0:(big_wall_id + 1)]
+                    del angle_list_p[0:(big_wall_id + 1)]
+                    del dist_list_p[0:(big_wall_id + 1)]
+
+                # insert the cross points and rec obs points after the small angle cross point
+                to_insert = []
+                to_insert.append([small_cross_point_x, small_cross_point_y, 0, 0, 0, 0, 0, 1])
+                to_insert.extend(rec_obs)
+                to_insert.append([big_cross_point_x, big_cross_point_y, 0, 0, 0, 0, 0, 1])
+                to_insert_angle = []
+                to_insert_dist = []
+                for k in range(len(to_insert)):
+                    to_insert_angle.append(math.atan2(to_insert[k][1] - ego_y, to_insert[k][0] - ego_x))
+                    to_insert_dist.append(np.linalg.norm([to_insert[k][0] - ego_x, to_insert[k][1] - ego_y]))
+
+                for k in range(len(to_insert)):
+                    to_insert[k] = np.array(to_insert[k])
+
+                #print("to_insert: ", to_insert)
+                #print("to_insert_angle: ", to_insert_angle)
+                #print("to_insert_dist: ", to_insert_dist)
+
+                #print("dynamic_boundary_p before insert: ", dynamic_boundary_p)
+
+                if small_wall_id >= (len(dynamic_boundary_p) - 1):
+                    # '>' happens when big_wall_id is smaller than small_wall_id, so
+                    # the first point to the big_wall_id are deleted, so simply put the
+                    # to_insert at the end.
+                    dynamic_boundary_p.extend(to_insert)
+                    angle_list_p.extend(to_insert_angle)
+                    dist_list_p.extend(to_insert_dist)
+                else:
+                    dynamic_boundary_p_temp = dynamic_boundary_p[0:(small_wall_id+1)]
+                    dynamic_boundary_p_temp.extend(to_insert)
+                    dynamic_boundary_p_temp.extend(dynamic_boundary_p[(small_wall_id+1):len(dynamic_boundary_p)])
+                    angle_list_p_temp = angle_list_p[0:(small_wall_id + 1)]
+                    angle_list_p_temp.extend(to_insert_angle)
+                    angle_list_p_temp.extend(angle_list_p[(small_wall_id + 1):len(angle_list_p)])
+                    dist_list_p_temp = dist_list_p[0:(small_wall_id + 1)]
+                    dist_list_p_temp.extend(to_insert_dist)
+                    dist_list_p_temp.extend(dist_list_p[(small_wall_id + 1):len(angle_list_p)])
+                    
+                    dynamic_boundary_p = dynamic_boundary_p_temp
+                    angle_list_p = angle_list_p_temp
+                    dist_list_p = dist_list_p_temp
+
+                #print("dynamic_boundary_p after insert: ", dynamic_boundary_p)
+
+            if len(dynamic_boundary_p) > 0:
+                dynamic_boundary_p.append(dynamic_boundary_p[0])
+
+            dynamic_boundary_p.reverse()
+
+            # only keep xy for calculation in collision check
+            '''dynamic_boundary_p_xy = []
+            for i in range(len(dynamic_boundary_p)):
+                pointx = dynamic_boundary_p[i][0]
+                pointy = dynamic_boundary_p[i][1]
+                dynamic_boundary_p_xy.append([pointx, pointy])'''
+
+            dynamic_boundary_p_xy_array = np.array(dynamic_boundary_p)
+            #print("dt: ", dt)
+            #print("dynamic_boundary_p: ", dynamic_boundary_p_xy_array)
+
+            dynamic_boundary_list.append(dynamic_boundary_p_xy_array)
+
+        rospy.logdebug("safe before drawing")
+        self.rviz_predi_boundary = self.rivz_element.draw_predi_boundary(dynamic_boundary_list)
+        rospy.logdebug("temp safe")
+
+
+        return dynamic_boundary_list

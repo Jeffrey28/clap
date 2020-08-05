@@ -27,6 +27,7 @@ class DecisionNode(object):
             RVIZ_all_trajectory_topic="all_trajectory_path", 
             RVIZ_predi_trajectory_topic="predi_trajectory_path", 
             RVIZ_collision_circle_topic="collision_circle", 
+            RVIZ_predi_boundary_topic="predi_boundary", 
             hz = 20,
         )
         self._rate = rospy.Rate(params.hz)
@@ -43,6 +44,7 @@ class DecisionNode(object):
         self._rviz_all_trajectory_publisher = rospy.Publisher(params.RVIZ_all_trajectory_topic, MarkerArray, queue_size=1)
         self._rviz_predi_trajectory_publisher = rospy.Publisher(params.RVIZ_predi_trajectory_topic, MarkerArray, queue_size=1)
         self._rviz_collision_circle_publisher = rospy.Publisher(params.RVIZ_collision_circle_topic, MarkerArray, queue_size=1)
+        self._rviz_predi_boundary_publisher = rospy.Publisher(params.RVIZ_predi_boundary_topic, Marker, queue_size=1)
 
     def loop(self):
         while not rospy.is_shutdown():
@@ -56,7 +58,7 @@ class DecisionNode(object):
             try:
                 self.pub_rviz()
             except:
-                rospy.logerror("rviz_display failed")
+                rospy.logerr("rviz_display failed")
                 
             self._rate.sleep()
         
@@ -64,6 +66,8 @@ class DecisionNode(object):
         all_trajectory = self._decision_instance._trajectory_planner.rivz_element.candidates_trajectory
         obs_paths = self._decision_instance._trajectory_planner.rivz_element.prediciton_trajectory
         collision_circle = self._decision_instance._trajectory_planner.rivz_element.collision_circle
+        predi_boundary = self._decision_instance._trajectory_planner.rivz_element.predi_boundary
+        self._rviz_predi_boundary_publisher.publish(predi_boundary)
         
         if all_trajectory:
             self._rviz_all_trajectory_publisher.publish(all_trajectory)
