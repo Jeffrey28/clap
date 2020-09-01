@@ -541,7 +541,7 @@ class DrivingSpaceConstructor:
             self._drivable_area_markerarray.markers.append(tempmarker)
             count = count + 1
             
-            #stress the dynamic parts
+            '''#stress the dynamic parts
             for i in range(len(tstates.drivable_area)):
                 point = tstates.drivable_area[i]
                 if abs(point[2]) < 0.1 and abs(point[3]) < 0.1:
@@ -582,7 +582,7 @@ class DrivingSpaceConstructor:
                 tempmarker.points.append(endpoint)
 
                 self._drivable_area_markerarray.markers.append(tempmarker)
-                count = count + 1
+                count = count + 1'''
 
         #7. next drivable area
         self._next_drivable_area_markerarray = MarkerArray()
@@ -616,7 +616,7 @@ class DrivingSpaceConstructor:
             self._next_drivable_area_markerarray.markers.append(tempmarker)
             count = count + 1
 
-            #stress the dynamic parts
+            '''#stress the dynamic parts
             for i in range(len(tstates.next_drivable_area)):
                 point = tstates.next_drivable_area[i]
                 if abs(point[2]) < 0.1 and abs(point[3]) < 0.1:
@@ -657,7 +657,7 @@ class DrivingSpaceConstructor:
                 tempmarker.points.append(endpoint)
 
                 self._next_drivable_area_markerarray.markers.append(tempmarker)
-                count = count + 1
+                count = count + 1'''
 
         #8. next lanes
         self._next_lanes_markerarray = MarkerArray()

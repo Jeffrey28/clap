@@ -4,6 +4,7 @@ import rospy
 import matplotlib.pyplot as plt
 import copy
 import math
+import time
 
 from cubic_spline_planner import Spline2D
 from nav_msgs.msg import Path
@@ -154,7 +155,7 @@ class Werling(object):
 
                 self.rivz_element.candidates_trajectory = self.rivz_element.put_trajectory_into_marker(self.all_trajectory)
             #self.rivz_element.prediciton_trajectory = self.rivz_element.put_trajectory_into_marker(self.obs_prediction.obs_paths)
-            #self.rivz_element.collision_circle = self.obs_prediction.rviz_collision_checking_circle
+            self.rivz_element.collision_circle = self.obs_prediction.rviz_collision_checking_circle
             self.rivz_element.predi_boundary = self.obs_prediction.rviz_predi_boundary
             #TODO: draw prediction with dynamic boundary
             return msg
@@ -175,8 +176,11 @@ class Werling(object):
             Frenetrefy = self.ref_path[:,1]
             tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
         # initialize prediction module
+        t1 = time.time()
         self.obs_prediction = predict(dynamic_map, dynamic_boundary, OBSTACLES_CONSIDERED, MAXT, DT, ROBOT_RADIUS, RADIUS_SPEED_RATIO, MOVE_GAP,
                                     get_speed(dynamic_map.ego_state))
+        t2 = time.time()
+        rospy.logdebug("predict initialize time consume: %f", t2-t1)
         return True
 
         #except:
@@ -223,23 +227,23 @@ class Werling(object):
         return start_state
 
     def frenet_optimal_planning(self, csp, c_speed, start_state):
-        t0 = rospy.get_rostime().to_sec()
+        t0 = time.time()
 
 
         fplist = self.calc_frenet_paths(c_speed, start_state)
-        t1 = rospy.get_rostime().to_sec()
+        t1 = time.time()
         time_consume1 = t1 - t0
         candidate_len1 = len(fplist)
 
 
         fplist = self.calc_global_paths(fplist, csp)
-        t2 = rospy.get_rostime().to_sec()
+        t2 = time.time()
         time_consume2 = t2 - t1
         candidate_len2 = len(fplist)
 
 
         fplist = self.check_paths(fplist)
-        t3 = rospy.get_rostime().to_sec()
+        t3 = time.time()
         time_consume3 = t3 - t2
         candidate_len3 = len(fplist)
         print("t2:", t2)
@@ -366,7 +370,12 @@ class Werling(object):
 
     def check_paths(self, fplist):
         okind = []
+        print("checking paths number: ", len(fplist))
+        t1 = time.time()
+        count_time = 0
         for i, _ in enumerate(fplist):
+
+            t10 = time.time()
 
             if any([v > MAX_SPEED for v in fplist[i].s_d]):  # Max speed check
                 # rospy.logdebug("exceeding max speed")
@@ -377,11 +386,21 @@ class Werling(object):
             elif any([abs(c) > MAX_CURVATURE for c in fplist[i].c]):  # Max curvature check
                 # rospy.logdebug("exceeding max curvature")
                 continue
-            if not self.obs_prediction.check_collision(fplist[i]):
+            t11 = time.time()
+            check_collision_flag = self.obs_prediction.check_collision(fplist[i])
+            t12 = time.time()
+            count_time = count_time + (t12 - t11)
+            print("one path check collision time outside: ", t12 - t11)
+            print("other time: ", t11 - t10)
+            print("count time: ", count_time)
+            if not check_collision_flag:
                 rospy.loginfo("check collision fail!\n")
                 continue
 
             okind.append(i)
+
+        t2 = time.time()
+        print("check path total time consume: ", t2 - t1)
 
         return [fplist[i] for i in okind]
 

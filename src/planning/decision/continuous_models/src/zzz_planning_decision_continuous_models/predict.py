@@ -3,6 +3,7 @@ import rospy
 import matplotlib.pyplot as plt
 import copy
 import math
+import time
 
 from Werling.trajectory_structure import Frenet_path, Frenet_state
 from zzz_common.kinematics import get_frenet_state
@@ -72,10 +73,13 @@ class predict():
             return True
 
         #t1 = rospy.get_rostime().to_sec()
+        t1 = time.time()
         #print(t1)
 
         fp_front = copy.deepcopy(fp)
         fp_back = copy.deepcopy(fp)
+
+        self.rviz_collision_checking_circle = self.rivz_element.draw_circles(fp_front, fp_back, self.check_radius)
         try:
             for t in range(len(fp.yaw)):
                 fp_front.x[t] = fp.x[t] + math.cos(fp.yaw[t]) * self.move_gap #jxy: 1m ahead
@@ -104,8 +108,11 @@ class predict():
                     temp_list.append([pointx, pointy])
 
                 drivable_area_array_xy = np.array(temp_list)
+                dist_time1 = time.time()
                 dist1, closest_id1, _, = dist_from_point_to_closedpolyline2d(fp_front.x[t], fp_front.y[t], drivable_area_array_xy)
                 dist0, closest_id0, _, = dist_from_point_to_closedpolyline2d(fp_front.x[t], fp_front.y[t], drivable_area_array0_xy)
+                dist_time2 = time.time()
+                #print("dist time: ", dist_time2 - dist_time1)
                 #TODO: fix the bug in the future, now use current boundary to correct
                 #dist2, closest_id2, _, = dist_from_point_to_closedpolyline2d(fp_back.x[t], fp_back.y[t], self.drivable_area_array)
                 
@@ -120,13 +127,13 @@ class predict():
                 #rospy.logdebug("point_flag: %d", point_flag)
                 radius = self.check_radius
                 if point_flag == 1: # static boundary part
-                    radius = 1
+                    radius = 2
 
                 point_flag = drivable_area_array0[closest_id0][7]
                 #rospy.logdebug("point_flag: %d", point_flag)
                 radius0 = self.check_radius
                 if point_flag == 1: # static boundary part
-                    radius0 = 1
+                    radius0 = 2
 
                 #print("check_radius: ", radius)
                 #print("dist1: ", dist1)
@@ -134,13 +141,18 @@ class predict():
                 #print("dist1: ", dist1)
                 #print("dist2: ", dist2)
                 if dist1 <= radius or dist0 <= radius0:
-                    print("collision time: dynamic_boundary_p: ", drivable_area_array)
-                    print("collision time: front point x: ", fp_front.x[t])
-                    print("collision time: front point y: ", fp_front.y[t])
+                    t2 = time.time()
+                    print("one path check collision time: ", t2-t1)
+                    #print("collision time: dynamic_boundary_p: ", drivable_area_array)
+                    #print("collision time: front point x: ", fp_front.x[t])
+                    #print("collision time: front point y: ", fp_front.y[t])
                     return False
             
         except:
             return False #jxy: when it cannot judge whether there will be a collision or not, why should it pass the test?
+
+        t2 = time.time()
+        print("one path check collision time: ", t2-t1)
 
         '''t2 = rospy.get_rostime().to_sec()
         print(t2)
@@ -172,7 +184,6 @@ class predict():
         '''
         #jxy: check collision by dynamic boundary
 
-        # self.rviz_collision_checking_circle = self.rivz_element.draw_circles(fp_front, fp_back, self.check_radius)
         return True
 
     def found_closest_obstacles(self):
