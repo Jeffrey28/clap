@@ -25,11 +25,8 @@ def calculate_next_drivable_area(tstates):
     '''
     tstates.next_drivable_area = [] #clear in every step
     ego_s = 0 # ego_s should be 0 since it is the startp of the next lanes
-    rospy.loginfo("Start to deal with drivable area")
 
     if not tstates.static_map.in_junction:
-        rospy.loginfo("next unit in junction:")
-        rospy.loginfo("next junction: static junction boundary point num: %d", len(tstates.static_map.next_drivable_area.points))
         current_lane_index = tstates.ego_lane_index
         current_lane = tstates.static_map.lanes[int(round(current_lane_index))]
 
@@ -311,10 +308,9 @@ def calculate_next_drivable_area(tstates):
         if len(tstates.next_drivable_area) > 0:
             tstates.next_drivable_area.append(tstates.next_drivable_area[0])
 
-        rospy.loginfo("next_drivable_area constructed with length %d", len(tstates.next_drivable_area))
+        #rospy.loginfo("next_drivable_area constructed with length %d", len(tstates.next_drivable_area))
 
     else:
-        rospy.loginfo("next unit in lanes:")
         #create a list of lane section, each section is defined as (start point s, end point s)
         #calculate from the right most lane to the left most lane, drawing drivable area boundary in counterclockwise
         lane_num = len(tstates.static_map.next_lanes)
@@ -341,7 +337,6 @@ def calculate_next_drivable_area(tstates):
             if obstacle.lane_index == -1:
                 continue
             else:
-                print obstacle.lane_dist_s
                 #the obstacle in on the same road as the ego vehicle
                 lane_index_rounded = int(round(obstacle.lane_index))
                 #TODO: consider those on the lane boundary
@@ -388,7 +383,7 @@ def calculate_next_drivable_area(tstates):
         if len(tstates.next_drivable_area) > 0:
             tstates.next_drivable_area.append(tstates.next_drivable_area[0])
 
-        rospy.loginfo("next_drivable_area constructed with length %d", len(tstates.next_drivable_area))
+        #rospy.loginfo("next_drivable_area constructed with length %d", len(tstates.next_drivable_area))
 
 
 def next_lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy, lane_boundaries, tstates):
@@ -565,11 +560,8 @@ def calculate_drivable_area(tstates):
     '''
     tstates.drivable_area = [] #clear in every step
     ego_s = tstates.ego_s
-    rospy.loginfo("Start to deal with drivable area")
 
     if tstates.static_map.in_junction:
-        rospy.loginfo("in junction:")
-        rospy.loginfo("static junction boundary point num: %d", len(tstates.static_map.drivable_area.points))
         ego_x = tstates.ego_vehicle_state.state.pose.pose.position.x
         ego_y = tstates.ego_vehicle_state.state.pose.pose.position.y
 
@@ -587,7 +579,6 @@ def calculate_drivable_area(tstates):
         flag_list = []
 
         # jxy0710: try to merge the next static boundary into the junction boundary to make one closed boundary, then add dynamic objects
-        rospy.loginfo("next unit in lanes:")
         #create a list of lane section, each section is defined as (start point s, end point s)
         #calculate from the right most lane to the left most lane, drawing drivable area boundary in counterclockwise
         lane_num = len(tstates.static_map.next_lanes)
@@ -626,8 +617,6 @@ def calculate_drivable_area(tstates):
                     lane_sections[i, 5], lane_sections[i, 2], lane_sections[i, 3], lane.left_boundaries, next_static_area)
 
         #The lower part are removed.
-
-        rospy.loginfo("half next_drivable_area constructed with length %d", len(tstates.next_drivable_area))
 
         # joint point: the start point of the right most lane boundary of the next lanes. It is also a point in current drivable area.
         # It is the first point of the next static area.
@@ -948,10 +937,9 @@ def calculate_drivable_area(tstates):
         if len(tstates.drivable_area) > 0:
             tstates.drivable_area.append(tstates.drivable_area[0])
 
-        rospy.loginfo("drivable_area constructed with length %d", len(tstates.drivable_area))
+        #rospy.loginfo("drivable_area constructed with length %d", len(tstates.drivable_area))
 
     else:
-        rospy.loginfo("in lanes:")
         #create a list of lane section, each section is defined as (start point s, end point s)
         #calculate from the right most lane to the left most lane, drawing drivable area boundary in counterclockwise
         lane_num = len(tstates.static_map.lanes)
@@ -1017,7 +1005,7 @@ def calculate_drivable_area(tstates):
         if len(tstates.drivable_area) > 0:
             tstates.drivable_area.append(tstates.drivable_area[0])
 
-        rospy.loginfo("drivable_area constructed with length %d", len(tstates.drivable_area))
+        #rospy.loginfo("drivable_area constructed with length %d", len(tstates.drivable_area))
 
 def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy, lane_boundaries, tstates):
 

@@ -196,8 +196,6 @@ class DrivingSpaceConstructor:
                             lane_point.flag = 3 + 0.1*i + 10 #mark the lane id in flag
                             self.dynamic_boundary.boundary.append(lane_point)
 
-        rospy.loginfo("---------------------dynamic boundary updated, point num %d!\n\n\n\n", len(self.dynamic_boundary.boundary))
-
         #visualization
         #1. lanes
         self._lanes_markerarray = MarkerArray()
@@ -438,8 +436,6 @@ class DrivingSpaceConstructor:
         #5. ego vehicle visualization
         self._ego_markerarray = MarkerArray()
 
-        rospy.loginfo("We are at position: %f %f\n\n\n\n", tstates.ego_vehicle_state.state.pose.pose.position.x, tstates.ego_vehicle_state.state.pose.pose.position.y)
-
         tempmarker = Marker()
         tempmarker.header.frame_id = "map"
         tempmarker.header.stamp = rospy.Time.now()
@@ -510,8 +506,6 @@ class DrivingSpaceConstructor:
         self._ego_markerarray.markers.append(tempmarker)
 
         #6. drivable area
-        rospy.loginfo("Start to draw drivable area:")
-        rospy.loginfo("drivable area point num: %d", len(tstates.drivable_area))
         self._drivable_area_markerarray = MarkerArray()
 
         count = 0
@@ -540,55 +534,9 @@ class DrivingSpaceConstructor:
                 tempmarker.points.append(p)
             self._drivable_area_markerarray.markers.append(tempmarker)
             count = count + 1
-            
-            '''#stress the dynamic parts
-            for i in range(len(tstates.drivable_area)):
-                point = tstates.drivable_area[i]
-                if abs(point[2]) < 0.1 and abs(point[3]) < 0.1:
-                    continue
-
-                if i != len(tstates.drivable_area) - 1:
-                    next_point = tstates.drivable_area[i+1]
-                else:
-                    # this is actually tstates.drivable_area[0] for closing the figure
-                    continue
-
-                tempmarker = Marker() #jxy: must be put inside since it is python
-                tempmarker.header.frame_id = "map"
-                tempmarker.header.stamp = rospy.Time.now()
-                tempmarker.ns = "zzz/cognition"
-                tempmarker.id = count
-                tempmarker.type = Marker.ARROW
-                tempmarker.action = Marker.ADD
-                tempmarker.scale.x = 0.40
-                tempmarker.scale.y = 0.75
-                tempmarker.scale.z = 0.75
-                tempmarker.color.r = 0.0
-                tempmarker.color.g = 0.0
-                tempmarker.color.b = 1.0
-                tempmarker.color.a = 1.0
-                tempmarker.lifetime = rospy.Duration(0.5)
-
-                #the velocity of i is the section velocity between point i and point i+1
-                startpoint = Point()
-                endpoint = Point()
-                startpoint.x = (point[0] + next_point[0])/2.0
-                startpoint.y = (point[1] + next_point[1])/2.0
-                startpoint.z = 0.0
-                endpoint.x = (point[0] + next_point[0])/2.0 + point[2]
-                endpoint.y = (point[1] + next_point[1])/2.0 + point[3]
-                endpoint.z = 0.0
-                tempmarker.points.append(startpoint)
-                tempmarker.points.append(endpoint)
-
-                self._drivable_area_markerarray.markers.append(tempmarker)
-                count = count + 1'''
 
         #7. next drivable area
         self._next_drivable_area_markerarray = MarkerArray()
-
-        rospy.loginfo("Start to draw next drivable area:")
-        rospy.loginfo("next drivable area point num: %d", len(tstates.next_drivable_area))
 
         count = 0
         if len(tstates.next_drivable_area) != 0:
@@ -767,11 +715,8 @@ class DrivingSpaceConstructor:
 
         #10. traffic lights
         self._traffic_lights_markerarray = MarkerArray()
-
         #TODO: now no lights are in. I'll check it when I run the codes.
-        
         #lights = self._traffic_light_detection.detections
-        #rospy.loginfo("lights num: %d\n\n", len(lights))
         
         rospy.logdebug("Updated driving space")
 
@@ -927,13 +872,11 @@ class DrivingSpaceConstructor:
             # Drive into junction, wait until next map
             tstates.ego_lane_index = -1
             tstates.ego_s = ego_s
-            rospy.logdebug("In junction due to close to intersection, ego_lane_index = %f, dist_to_lane_tail = %f", ego_lane_index, self._ego_vehicle_distance_to_lane_tail[int(ego_lane_index)])
             return
         else:
             tstates.ego_lane_index = ego_lane_index
             tstates.ego_s = ego_s
             #TODO: this is not modified!
-        rospy.logdebug("Distance to end: (lane %f) %f", ego_lane_index, self._ego_vehicle_distance_to_lane_tail[ego_lane_index_rounded])
 
     def locate_traffic_light_in_lanes(self, tstates):
         # TODO: Currently it's a very simple rule to locate the traffic lights

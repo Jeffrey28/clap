@@ -52,7 +52,7 @@ class rviz_display():
 
     def draw_predi_boundary(self, dynamic_boundary_list):
 
-        print("draw dynamic boundary, list length: ", len(dynamic_boundary_list))
+        #print("draw dynamic boundary, list length: ", len(dynamic_boundary_list))
         predi_boundary = dynamic_boundary_list[1]
             
         tempmarker = Marker() #jxy: must be put inside since it is python

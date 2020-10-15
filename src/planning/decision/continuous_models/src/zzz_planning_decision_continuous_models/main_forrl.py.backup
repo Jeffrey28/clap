@@ -56,10 +56,10 @@ class MainDecision(object):
         # Check whether world info is dead
         self.current_time = time.time()
         if self.current_time - self.last_time > 10 or self._bridge_lock == 1:
-            print("Bridge restart!")
+            rospy.loginfo("Bridge restart!")
             if self.current_time - self._world_info_flag > 10 or self._bridge_lock == 1:
                 #the world info is dead
-                print("World info is dead!")
+                rospy.loginfo("World info is dead!")
                 self._bridge_lock = 1
                 return None
 
@@ -72,7 +72,7 @@ class MainDecision(object):
         ego_x = dynamic_map.ego_state.pose.pose.position.x
         ego_y = dynamic_map.ego_state.pose.pose.position.y
         if (-55 < ego_x < -45 and 17 < ego_y < 27) or (25 < ego_x < 35 and 25 < ego_y < 35):
-            print("Rule decision in false junction!")
+            rospy.loginfo("Rule decision in false junction!")
             return self._trajectory_planner.trajectory_update(dynamic_map, dynamic_boundary)
 
         else:

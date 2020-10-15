@@ -89,7 +89,7 @@ class ZZZCarlaEnv(gym.Env):
         
         action = action.astype(float)
         action = action.tolist()
-        print("-------------",type(action),action)
+        #print("-------------",type(action),action)
         no_state_time = time.time()
         no_state_start_time = time.time()
         no_state_flag = 0
@@ -103,10 +103,10 @@ class ZZZCarlaEnv(gym.Env):
                 self.sock_conn.sendall(msgpack.packb(send_action))
 
                 # wait next state
-                print("-------------try receiving msg in step")
+                #print("-------------try receiving msg in step")
                 received_msg = msgpack.unpackb(self.sock_conn.recv(self.sock_buffer))
-                print("-------------received msg in step")
-                print("msg length: ", len(received_msg))
+                #print("-------------received msg in step")
+                #print("msg length: ", len(received_msg))
 
                 state_dim = self.state_dimention
 
@@ -132,9 +132,9 @@ class ZZZCarlaEnv(gym.Env):
                 ego_vs = self.state[0][2]
                 ego_vd = self.state[0][3]
 
-                print("+++ rule action: ", RLpointx, RLpointy)
-                print("+++ our action:  ", action[0], action[1])
-                print("ego_vs: ", ego_vs)
+                #print("+++ rule action: ", RLpointx, RLpointy)
+                #print("+++ our action:  ", action[0], action[1])
+                #print("ego_vs: ", ego_vs)
 
                 if RLpointx > 2.0:
                     RLpointx = 2.0
@@ -154,21 +154,6 @@ class ZZZCarlaEnv(gym.Env):
                 #reward = 5 * (5 - punish_angle - punish_speed)
                 
                 #print("ego_s: ", ego_s)
-
-                #jxy0716: after the low speed flag is used to judge collision restart, middle low speed escaped punishment.
-                '''if ego_vs < 0.5:
-                    self.middle_low_speed_flag = 1
-                    self.middle_low_speed_time = time.time()
-                else:
-                    self.middle_low_speed_flag = 0
-                    self.middle_high_speed_last_time = time.time()
-
-                if self.middle_low_speed_flag == 1 and self.middle_low_speed_time - self.middle_high_speed_last_time > 3:
-                    print("middle low speed for more than 3s")
-                    if RLpointy > -1:
-                        #jxy0715: if the rule decision is also braking, the punishment will be spared
-                        reward = -5 # stop will remove the ego_s reward
-                        print("middle low speed reward: ", -5)'''
 
                 # reward 2: the planned trajectory should be inside the boundary. Calculated in VEG_planner.
                 #jxy0720: add manual braking
@@ -236,7 +221,7 @@ class ZZZCarlaEnv(gym.Env):
 
                 reward = reward * 2
                 
-                print("reward2 = ", reward)
+                #print("reward2 = ", reward)
 
                 #low speed reward
                 if ego_vs < 0.1 and braking_flag == 0:
@@ -247,15 +232,15 @@ class ZZZCarlaEnv(gym.Env):
                     self.high_speed_last_time = time.time()
 
                 if self.low_speed_flag == 1 and self.low_speed_time - self.high_speed_last_time > 3:
-                    print("low speed for more than 3s")
+                    #print("low speed for more than 3s")
                     if (braking_flag == 0 and action[1] < 0) or self.low_speed_time - self.high_speed_last_time > 8:
                         #jxy0715: if the rule decision is also braking, the punishment will be spared
                         #jxy0724: after 7s, the front vehicle will be removed, if still stop, it will be punished.
                         reward = -2
-                        print("low speed reward: ", reward)
+                        #print("low speed reward: ", reward)
 
                 # reward 3: final status: collision, success or restart
-                print("collision: ", collision)
+                #print("collision: ", collision)
                 if collision:
                     done = True
                     reward = -1500#-1500
@@ -325,13 +310,13 @@ class ZZZCarlaEnv(gym.Env):
         while True:
             try:
                 action = [2333,2333,0,0]
-                print("-------------",type(action),action)
+                #print("-------------",type(action),action)
 
                 self.sock_conn.sendall(msgpack.packb(action))
-                print("-------------try receiving msg in reset")
+                #print("-------------try receiving msg in reset")
 
                 received_msg = msgpack.unpackb(self.sock_conn.recv(self.sock_buffer))
-                print("-------------received msg in reset")
+                #print("-------------received msg in reset")
 
                 state_dim = self.state_dimention
 

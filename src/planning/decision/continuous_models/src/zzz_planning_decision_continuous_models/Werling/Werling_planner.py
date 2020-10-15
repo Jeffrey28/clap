@@ -83,7 +83,6 @@ class Werling(object):
         return None
     
     def trajectory_update(self, dynamic_map, dynamic_boundary):
-        print("we are here, updating trajectory")
         if self.initialize(dynamic_map, dynamic_boundary):
 
             drivable_area_list=[]
@@ -95,7 +94,6 @@ class Werling(object):
                     position_point = [point_x, point_y]
                     drivable_area_list.append(position_point)
             
-            print("drivable area decoded, length ", len(drivable_area_list))
             drivable_area_array = np.array(drivable_area_list)
             ego_x = dynamic_map.ego_state.pose.pose.position.x
             ego_y = dynamic_map.ego_state.pose.pose.position.y
@@ -194,7 +192,6 @@ class Werling(object):
             trajectory.append([ego_x + 0.1 * i * length_arrow_world[0], ego_y + 0.1 * i * length_arrow_world[1]])
 
         trajectory_array = np.array(trajectory)
-        print(trajectory_array)
         return trajectory_array
 
     def calculate_start_state(self, dynamic_map):
@@ -246,8 +243,6 @@ class Werling(object):
         t3 = time.time()
         time_consume3 = t3 - t2
         candidate_len3 = len(fplist)
-        print("t2:", t2)
-        print("t3:", t3)
 
         rospy.logdebug("frenet time consume step1: %.2f(candidate: %d), step2: %.2f(candidate: %d), step3: %.2f(candidate: %d)",
                                             time_consume1, candidate_len1,
@@ -370,7 +365,7 @@ class Werling(object):
 
     def check_paths(self, fplist):
         okind = []
-        print("checking paths number: ", len(fplist))
+        #rospy.loginfo("checking paths number: ", len(fplist))
         t1 = time.time()
         count_time = 0
         for i, _ in enumerate(fplist):
@@ -390,9 +385,9 @@ class Werling(object):
             check_collision_flag = self.obs_prediction.check_collision(fplist[i])
             t12 = time.time()
             count_time = count_time + (t12 - t11)
-            print("one path check collision time outside: ", t12 - t11)
-            print("other time: ", t11 - t10)
-            print("count time: ", count_time)
+            #rospy.loginfo("one path check collision time outside: ", t12 - t11)
+            #rospy.loginfo("other time: ", t11 - t10)
+            #rospy.loginfo("count time: ", count_time)
             if not check_collision_flag:
                 rospy.loginfo("check collision fail!\n")
                 continue
@@ -400,7 +395,7 @@ class Werling(object):
             okind.append(i)
 
         t2 = time.time()
-        print("check path total time consume: ", t2 - t1)
+        #rospy.loginfo("check path total time consume: ", t2 - t1)
 
         return [fplist[i] for i in okind]
 

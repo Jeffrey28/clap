@@ -63,8 +63,7 @@ class predict():
                 position_point = [point_x, point_y, point_vx, point_vy, point_base_x, point_base_y, point_omega, point_flag]
                 drivable_area_list.append(position_point)
         
-        print("drivable area decoded, length ", len(drivable_area_list))
-        print(np.array(drivable_area_list))
+        #print("drivable area decoded, length ", len(drivable_area_list))
         return np.array(drivable_area_list)
         
         
@@ -72,9 +71,7 @@ class predict():
         if len(fp.t) < 2 :
             return True
 
-        #t1 = rospy.get_rostime().to_sec()
         t1 = time.time()
-        #print(t1)
 
         fp_front = copy.deepcopy(fp)
         fp_back = copy.deepcopy(fp)
@@ -88,7 +85,6 @@ class predict():
                 fp_back.y[t] = fp.y[t] - math.sin(fp.yaw[t]) * self.move_gap
                 
             drivable_area_array0 = self.drivable_area_array_list[0]
-            #print("drivable_area_array:", drivable_area_array)
             temp_list = []
             for i in range(len(drivable_area_array0)):
                 pointx = drivable_area_array0[i][0]
@@ -100,7 +96,6 @@ class predict():
             for t in range(len(fp.t)):
                 #TODO: predict drivable area array
                 drivable_area_array = self.drivable_area_array_list[t]
-                #print("drivable_area_array:", drivable_area_array)
                 temp_list = []
                 for i in range(len(drivable_area_array)):
                     pointx = drivable_area_array[i][0]
@@ -112,77 +107,29 @@ class predict():
                 dist1, closest_id1, _, = dist_from_point_to_closedpolyline2d(fp_front.x[t], fp_front.y[t], drivable_area_array_xy)
                 dist0, closest_id0, _, = dist_from_point_to_closedpolyline2d(fp_front.x[t], fp_front.y[t], drivable_area_array0_xy)
                 dist_time2 = time.time()
-                #print("dist time: ", dist_time2 - dist_time1)
-                #TODO: fix the bug in the future, now use current boundary to correct
-                #dist2, closest_id2, _, = dist_from_point_to_closedpolyline2d(fp_back.x[t], fp_back.y[t], self.drivable_area_array)
                 
-                #rospy.logdebug("front path point: %f %f", fp_front.x[t], fp_front.y[t])
-                #rospy.logdebug("fp.yaw[t]: %f", fp.yaw[t])
-                #rospy.logdebug("self.move_gap: %f", self.move_gap)
-                #rospy.logdebug("fp: %f %f", fp.x[t], fp.y[t])
-                #rospy.logdebug("back path point: %f %f", fp_back.x[t], fp_back.y[t])
                 #jxy: hopefully this is the last bug to deal with.
                 #TODO: there are sometimes the self circling problem, hopefully I can solve it in the future.
                 point_flag = drivable_area_array[closest_id1][7]
-                #rospy.logdebug("point_flag: %d", point_flag)
                 radius = self.check_radius
                 if point_flag == 1: # static boundary part
                     radius = 2
 
                 point_flag = drivable_area_array0[closest_id0][7]
-                #rospy.logdebug("point_flag: %d", point_flag)
                 radius0 = self.check_radius
                 if point_flag == 1: # static boundary part
                     radius0 = 2
 
-                #print("check_radius: ", radius)
-                #print("dist1: ", dist1)
-                
-                #print("dist1: ", dist1)
-                #print("dist2: ", dist2)
                 if dist1 <= radius or dist0 <= radius0:
                     t2 = time.time()
-                    print("one path check collision time: ", t2-t1)
-                    #print("collision time: dynamic_boundary_p: ", drivable_area_array)
-                    #print("collision time: front point x: ", fp_front.x[t])
-                    #print("collision time: front point y: ", fp_front.y[t])
+                    #print("one path check collision time: ", t2-t1)
                     return False
             
         except:
             return False #jxy: when it cannot judge whether there will be a collision or not, why should it pass the test?
 
         t2 = time.time()
-        print("one path check collision time: ", t2-t1)
-
-        '''t2 = rospy.get_rostime().to_sec()
-        print(t2)
-        time_consume2 = t2 - t1
-        rospy.logdebug("one path collision check time consume: %.6f", time_consume2)'''
-            
-        # two circles for a vehicle
-        '''
-        fp_front = copy.deepcopy(fp)
-        fp_back = copy.deepcopy(fp)
-        try:
-            for t in range(len(fp.yaw)):
-                fp_front.x[t] = fp.x[t] + math.cos(fp.yaw[t]) * self.move_gap
-                fp_front.y[t] = fp.y[t] + math.sin(fp.yaw[t]) * self.move_gap
-                fp_back.x[t] = fp.x[t] - math.cos(fp.yaw[t]) * self.move_gap
-                fp_back.y[t] = fp.y[t] - math.sin(fp.yaw[t]) * self.move_gap
-
-            for obsp in self.obs_paths:
-                for t in range(len(fp.t)):
-                    d = (obsp.x[t] - fp_front.x[t])**2 + (obsp.y[t] - fp_front.y[t])**2
-                    if d <= self.check_radius**2: 
-                        return False
-                    d = (obsp.x[t] - fp_back.x[t])**2 + (obsp.y[t] - fp_back.y[t])**2
-                    if d <= self.check_radius**2: 
-                        return False
-        except:
-            pass
-            # print("collision check fail",len(fp.yaw),len(fp_back.x),len(fp_front.x))
-        '''
-        #jxy: check collision by dynamic boundary
+        #print("one path check collision time: ", t2-t1)
 
         return True
 
@@ -276,7 +223,6 @@ class predict():
 
             # step 2: predict moving obstacles
             # step 2-1: decode the moving obstacles in t0
-            #print("dynamic_boundary: ", dynamic_boundary)
             base_x_buffer = -1
             base_y_buffer = -1
             count_corner = 0
@@ -285,7 +231,6 @@ class predict():
             rec_obs_list = []
             for j in range(len(dynamic_boundary)):
                 if dynamic_boundary[j][7] == 2:
-                    #print("j: ", j)
                     # check base point
                     pointbasex = dynamic_boundary[j][5]
                     pointbasey = dynamic_boundary[j][6]
@@ -295,14 +240,11 @@ class predict():
                         base_x_buffer = pointbasex
                         base_y_buffer = pointbasey
                         rec_obs.append(list(dynamic_boundary[j]))
-                        #print("rec_obs: ", rec_obs)
                     elif base_x_buffer == pointbasex and base_y_buffer == pointbasey:
                         count_corner = count_corner + 1
                         rec_obs.append(list(dynamic_boundary[j]))
-                        #print("rec_obs: ", rec_obs)
                     else:
                         # change to another obs
-                        #print("change to another obs")
                         count_corner = 1
                         base_x_buffer = pointbasex
                         base_y_buffer = pointbasey
@@ -310,13 +252,10 @@ class predict():
                         rec_obs = []
                         count_obs = count_obs + 1
                         rec_obs.append(list(dynamic_boundary[j]))
-                        #print("rec_obs: ", rec_obs)
 
             if len(rec_obs) != 0:
                 rec_obs_list.append(rec_obs)
-            '''if len(rec_obs_list) > 0:
-                print("rec obs list: ", rec_obs_list)
-            else:
+            '''else:
                 print("no obstacles in the junction")'''
 
             if len(rec_obs_list) != 1 and len(rec_obs_list) != 0:
@@ -354,8 +293,6 @@ class predict():
                     rec_obs[j][1] = y_p
                     corner_list_angle.append(math.atan2(y_p - ego_y, x_p - ego_x))
                     corner_list_dist.append(np.linalg.norm([x_p - ego_x, y_p - ego_y]))
-                
-                #print("predicted rec_obs: ", rec_obs)
 
                 # reconstruct full obstacle and sort by angle
                 if len(rec_obs) > 3: #TODO: fix it in drivable_area. Now only get 3 points if there are more than 3.
@@ -397,8 +334,6 @@ class predict():
                 else:
                     continue # illegal obstacle (e.g. only one point)
 
-                #print("constructed full obstacle: ", rec_obs)
-
                 small_corner_id = np.argmin(corner_list_angle)
                 big_corner_id = np.argmax(corner_list_angle)
 
@@ -423,11 +358,7 @@ class predict():
                     rec_obs_new.append(rec_obs[middle_corner_id])
                 rec_obs_new.append(rec_obs[big_corner_id])
 
-                #print("rec_obs_new: ", rec_obs_new)
-
                 rec_obs_list[i] = rec_obs_new
-
-            #print("rec_obs_list final version:", rec_obs_list)
 
             # step 3: construct the predicted boundary combining the last 2 steps
             # jxy: the angle order is different from matlab test, so reverse it
@@ -463,9 +394,6 @@ class predict():
                 rec_obs_list_temp.append(rec_obs_list[m])
             rec_obs_list = rec_obs_list_temp
 
-            #print("angle_list_p length: ", len(angle_list_p))
-            #print("dynamic_boundary_p length: ", len(dynamic_boundary_p))
-
             for i in range(len(rec_obs_list)):
                 continue_flag = 0
 
@@ -493,20 +421,10 @@ class predict():
                 small_wall_id = 0
                 big_wall_id = 0
 
-                #print("dynamic_boundary_p length: ", len(dynamic_boundary_p))
-                #print("angle_list_p length: ", len(angle_list_p))
-                #print("dist_list_p length: ", len(dist_list_p))
-
                 for j in range(len(dynamic_boundary_p)):
                     next_id = j + 1
                     if next_id >= len(dynamic_boundary_p):
                         next_id = 0
-
-                    '''print("j: ",j)
-                    print("next_id: ", next_id)
-                    print("dynamic_boundary_p length: ", len(dynamic_boundary_p))
-                    print("angle_list_p length: ", len(angle_list_p))
-                    print("dist_list_p length: ", len(dist_list_p))'''
 
                     if ((small_angle>angle_list_p[j] and small_angle-angle_list_p[j]<=math.pi) or (small_angle<=angle_list_p[j] and angle_list_p[j]-small_angle>=math.pi)) and \
                         ((small_angle<=angle_list_p[next_id] and angle_list_p[next_id]-small_angle<=math.pi) or (small_angle>angle_list_p[next_id] and small_angle-angle_list_p[next_id]>=math.pi)):
@@ -551,9 +469,6 @@ class predict():
                     continue
                 
                 # remove the points between the cross points (if any, in increasing order
-                #print("angle_list_p: ", angle_list_p)
-                #print("small wall id: ", small_wall_id)
-                #print("big_wall_id: ", big_wall_id)
                 if big_wall_id > small_wall_id:
                     # delete: small_wall_id + 1 to big_wall_id (+ 1 in python)
                     del dynamic_boundary_p[(small_wall_id + 1):(big_wall_id + 1)]
@@ -583,12 +498,6 @@ class predict():
                 for k in range(len(to_insert)):
                     to_insert[k] = np.array(to_insert[k])
 
-                #print("to_insert: ", to_insert)
-                #print("to_insert_angle: ", to_insert_angle)
-                #print("to_insert_dist: ", to_insert_dist)
-
-                #print("dynamic_boundary_p before insert: ", dynamic_boundary_p)
-
                 if small_wall_id >= (len(dynamic_boundary_p) - 1):
                     # '>' happens when big_wall_id is smaller than small_wall_id, so
                     # the first point to the big_wall_id are deleted, so simply put the
@@ -611,29 +520,15 @@ class predict():
                     angle_list_p = angle_list_p_temp
                     dist_list_p = dist_list_p_temp
 
-                #print("dynamic_boundary_p after insert: ", dynamic_boundary_p)
-
             if len(dynamic_boundary_p) > 0:
                 dynamic_boundary_p.append(dynamic_boundary_p[0])
 
             dynamic_boundary_p.reverse()
 
-            # only keep xy for calculation in collision check
-            '''dynamic_boundary_p_xy = []
-            for i in range(len(dynamic_boundary_p)):
-                pointx = dynamic_boundary_p[i][0]
-                pointy = dynamic_boundary_p[i][1]
-                dynamic_boundary_p_xy.append([pointx, pointy])'''
-
             dynamic_boundary_p_xy_array = np.array(dynamic_boundary_p)
-            #print("dt: ", dt)
-            #print("dynamic_boundary_p: ", dynamic_boundary_p_xy_array)
 
             dynamic_boundary_list.append(dynamic_boundary_p_xy_array)
 
-        rospy.logdebug("safe before drawing")
         self.rviz_predi_boundary = self.rivz_element.draw_predi_boundary(dynamic_boundary_list)
-        rospy.logdebug("temp safe")
-
 
         return dynamic_boundary_list

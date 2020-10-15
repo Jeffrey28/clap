@@ -21,9 +21,9 @@ class MainDecision(object):
         self._dynamic_map_buffer = dynamic_map
 
     def receive_dynamic_boundary(self, dynamic_boundary):
-        rospy.loginfo("Received dynamic boundary")
-        rospy.loginfo("received point num: %d", len(dynamic_boundary.boundary))
-        rospy.loginfo("header: %s", dynamic_boundary.header.frame_id)
+        rospy.logdebug("Received dynamic boundary")
+        rospy.logdebug("received point num: %d", len(dynamic_boundary.boundary))
+        rospy.logdebug("header: %s", dynamic_boundary.header.frame_id)
         self._dynamic_boundary_buffer = dynamic_boundary
 
     def update_trajectory(self):

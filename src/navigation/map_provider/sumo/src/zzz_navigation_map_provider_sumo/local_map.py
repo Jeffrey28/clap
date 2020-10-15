@@ -115,25 +115,6 @@ class LocalMap(object):
                                         for waypoint in reversed(reference_path.poses)]
         self._reference_path.reverse()
 
-        # todo this loop needs to be optimised later
-
-        '''
-        for wp in reference_path.poses:
-            # TODO: Takes too much time for processing
-            print("running-------------------")
-            
-            wp_map_x, wp_map_y = self.convert_to_map_XY(wp.pose.position.x, wp.pose.position.y)
-
-            # Find the closest lane of the reference path points
-            lanes = self._hdmap.getNeighboringLanes(wp_map_x, wp_map_y, self._lane_search_radius, includeJunctions=False)
-            if len(lanes) > 0:
-                _, closestLane = min((dist, lane) for lane, dist in lanes)
-                # Discard duplicate lane ids
-                if len(self._reference_lane_list) != 0 and closestLane.getID() == self._reference_lane_list[-1].getID():
-                    continue
-                self._reference_lane_list.append(closestLane)
-        '''
-
         return True
 
     def convert_to_map_XY(self, x, y):
@@ -166,30 +147,28 @@ class LocalMap(object):
         Determine whether map updating is needed.
         '''
         map_x, map_y = self.convert_to_map_XY(self._ego_vehicle_x, self._ego_vehicle_y)
-        rospy.logdebug("Check update: ego_map_location = (%f, %f), ego_location = (%f, %f)",
-            map_x, map_y, self._ego_vehicle_x, self._ego_vehicle_y)
 
         lanes = self._hdmap.getNeighboringLanes(map_x, map_y, self._lane_search_radius, includeJunctions=False)
         if len(lanes) > 0:
             _, closestLane = min((dist, lane) for lane, dist in lanes)
             new_edge = closestLane.getEdge()
             new_edge.id = new_edge.getID()
-            rospy.loginfo("Found ego vehicle neighbor edge id = %s",new_edge.id)
+            rospy.logdebug("Found ego vehicle neighbor edge id = %s",new_edge.id)
             if self._current_edge_id is None or new_edge.id != self._current_edge_id or (abs(map_x + 10) < 1 and abs(map_y - 96) < 1):
                 #TODO: check when change map!!
                 #jxy0518: in RL, when bump in the first section, the vehicle will go back to the start point without edge id changing.
-                rospy.loginfo("Should update static map, edge id %s -> %s", self._current_edge_id, new_edge.id)
-                rospy.loginfo("We are at point %f %f", map_x, map_y)
+                rospy.logdebug("Should update static map, edge id %s -> %s", self._current_edge_id, new_edge.id)
+                rospy.logdebug("We are at point %f %f", map_x, map_y)
                 self._in_section_flag = 0
                 self._near_section_flag = 0
                 return 1
             else:
-                rospy.loginfo("We are in the road, edge id is not changed, edge id is %s", self._current_edge_id)
+                rospy.logdebug("We are in the road, edge id is not changed, edge id is %s", self._current_edge_id)
                 # if near the section, load the shape of the section
                 lane_tail_point = closestLane.getShape()[-1]
                 dist_to_lane_tail = math.sqrt(math.pow((map_x - lane_tail_point[0]), 2) + math.pow((map_y - lane_tail_point[1]), 2))
                 if dist_to_lane_tail < perception_range_demand:
-                    rospy.loginfo("We are near the junction, load the junction")
+                    rospy.logdebug("We are near the junction, load the junction")
                     if dist_to_lane_tail < lane_end_dist_thres:
                         # cognition demand, this should be regarded as vehicle in junction
                         if self._in_section_flag == 0:
@@ -249,7 +228,7 @@ class LocalMap(object):
 
         end = time.time()
 
-        rospy.loginfo("Updated static map info: update mode = %d, lane_number = %d, in_junction = %d, current_edge_id = %s, \
+        rospy.logdebug("Updated static map info: update mode = %d, lane_number = %d, in_junction = %d, current_edge_id = %s, \
             target_lane_index = %s, time consume = %f, update_lane_list time = %f",
             update_mode, len(self.static_local_map.lanes), int(self.static_local_map.in_junction),
             self._current_edge_id, self.static_local_map.target_lane_index, 1000*(end-start), 1000*(middle-start))
@@ -257,7 +236,7 @@ class LocalMap(object):
     def update_next_lanes(self, step_length = 20):
 
         map_x, map_y = self.convert_to_map_XY(self._ego_vehicle_x, self._ego_vehicle_y)
-        rospy.loginfo("Enter junction, see the next road section")
+        rospy.logdebug("Enter junction, see the next road section")
         if len(self._reference_path) > 1:
             _, nearest_idx, _ = dist_from_point_to_polyline2d(
                 map_x, map_y, np.array(self._reference_path)
@@ -276,8 +255,6 @@ class LocalMap(object):
                     elif last_edge is None or last_edge != current_edge.getID():
                         #jxy: next map buffer should be reinitialized and updated
                         self._next_edge_id = current_edge.getID()
-                        print "next_edge_id is:"
-                        print self._next_edge_id
 
                         self._next_map_buffer.lanes = []
 
@@ -370,13 +347,7 @@ class LocalMap(object):
                 #correctly enter the next edge
                 self.static_local_map.lanes = self._next_map_buffer.lanes
 
-                rospy.loginfo("Updating lane by buffer!")
-
                 return
-
-            rospy.loginfo("Updating lane independently!")
-            print self._next_edge_id
-            print self._current_edge_id
 
             #if enter the wrong edge (unplanned)
             lanes_in_edge = self.new_edge.getLanes()
@@ -443,14 +414,6 @@ class LocalMap(object):
                 location.x = x
                 location.y = y
                 waypoint = self._world.get_map().get_waypoint(location)
-
-                '''
-                rospy.loginfo("Road id in OpenDRIVE: %d", waypoint.road_id)
-                rospy.loginfo("SUMO road id: %s", self._current_edge_id)
-                rospy.loginfo("Lane id in OpenDRIVE: %d", waypoint.lane_id)
-                rospy.loginfo("Lane type in OpenDRIVE: %s", waypoint.lane_type)
-                rospy.loginfo("Lane id in SUMO: %d", index)
-                '''
 
                 angle = 3.1415927/2 - last_tangent
                 left_bound.boundary_point.s = point.s

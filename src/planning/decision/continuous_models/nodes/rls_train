@@ -51,10 +51,8 @@ class RLSNode(object):
 
     def loop(self):
         while not rospy.is_shutdown():
-            rospy.loginfo("rls train started\n")
             publish_msg = self._decision_instance.update_trajectory()
             if publish_msg:
-                rospy.loginfo("Succeeded to publish the trajectory!!!\n\n\n\n")
                 self._decision_trajectory_publisher.publish(publish_msg)
                 publish_msg2 = publish_msg.trajectory
                 self._rviz_decision_trajectory_publisher.publish(publish_msg2)
@@ -65,7 +63,7 @@ class RLSNode(object):
             try:
                 self.pub_rviz()
             except:
-                print("rviz_display failed")
+                rospy.loginfo("rviz_display failed")
                 
             self._rate.sleep()
         
@@ -86,7 +84,7 @@ class RLSNode(object):
 
 
     def collision_callback(self, msg):
-        print("received collision in rls train!\n\n\n\n\n\n\n\n")
+        #rospy.loginfo("received collision in rls train!\n\n\n\n\n\n\n\n")
         self._decision_instance._trajectory_planner._collision_signal = True
 
 if __name__ == "__main__":

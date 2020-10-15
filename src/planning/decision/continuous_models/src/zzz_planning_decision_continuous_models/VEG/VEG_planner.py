@@ -36,7 +36,6 @@ class VEG_Planner(object):
         self._collision_signal = False
         self._collision_times = 0
         self._has_clear_buff = False
-        print("has clear buff?", self._has_clear_buff)
 
         self.reference_path = None
         self.ref_path = None
@@ -80,18 +79,16 @@ class VEG_Planner(object):
                 self.ref_path_tangets = np.zeros(len(self.ref_path))
             return True
         except:
-            print("------> VEG: Initialize fail ")
+            rospy.logerr("------> VEG: Initialize fail ")
             return False
 
     def clear_buff(self, dynamic_map):
-        print("has clear buff?", self._has_clear_buff)
         self._rule_based_trajectory_model_instance.clear_buff(dynamic_map)
         
         self.reference_path = None
         self.ref_path = None
         self.ref_path_tangets = None
         rospy.loginfo("start to clear buff!")
-        print("has clear buff?", self._has_clear_buff)
 
         # send done to OPENAI
         if self._has_clear_buff == False:
@@ -133,8 +130,7 @@ class VEG_Planner(object):
 
             # wrap states
             sent_RL_msg = self.wrap_state_dynamic_boundary()
-            print("length???", len(sent_RL_msg))
-            print(sent_RL_msg)
+            rospy.logdebug("length of sent_RL_msg: ", len(sent_RL_msg))
             '''sent_RL_msg = []
             for i in range(303):
                 sent_RL_msg.append(0.5)'''
@@ -206,18 +202,13 @@ class VEG_Planner(object):
                 lane_list.append(current_lane)
             if len(current_next_lane) > 0:
                 next_lane_list.append(current_next_lane)
-            
-            print("drivable area decoded, length ", len(drivable_area_list))
-            print("next_drivable_area_decoded, length ", len(next_drivable_area_list))
-            print("lanes decoded, num ", len(lane_list))
-            print("next lanes decoded, num ", len(next_lane_list))
 
             drivable_area_array = np.array(drivable_area_list)
             next_drivable_area_array = np.array(next_drivable_area_list)
 
             #jxy 0710: when ego vehicle is still out of the junction, do not train.
             if len(drivable_area_array) < 3:
-                print("It is a false junction, return!")
+                rospy.loginfo("It is a false junction, return!")
                 return rule_trajectory_msg
 
             ego_s = sent_RL_msg[0][0]
@@ -225,18 +216,15 @@ class VEG_Planner(object):
             ego_vs = sent_RL_msg[0][2]
             ego_vd = sent_RL_msg[0][3]
             drivable_area_min_s = min(drivable_area_s_list)
-            print("drivable area min s: ", drivable_area_min_s)
             if ego_s < drivable_area_min_s: #still not entering the junction
-                print("ego vehicle still out of the junction, return!")
                 return rule_trajectory_msg
 
             ego_x = dynamic_map.ego_state.pose.pose.position.x
             ego_y = dynamic_map.ego_state.pose.pose.position.y
             if (-55 < ego_x < -45 and 17 < ego_y < 27) or (25 < ego_x < 35 and 25 < ego_y < 35):
-                print("Rule decision in false junction!")
+                rospy.loginfo("Rule decision in false junction!")
                 return rule_trajectory_msg
-
-            print("-----------------------------",sent_RL_msg)
+            
             rospy.loginfo("sent msg length, %d", len(sent_RL_msg))
             self.sock.sendall(msgpack.packb(sent_RL_msg))
             rospy.loginfo("sent RL msg succeeded!!!\n\n\n")
@@ -251,12 +239,10 @@ class VEG_Planner(object):
             
                 VEG_trajectory = self.generate_VEG_trajectory(rl_q, rule_q, rl_action, rule_trajectory_msg)
                 #trajectory_points = VEG_trajectory.trajectory.poses
-                print("temp safe...")
 
                 # reward: if the vehicle is running out of the drivable area, punish it.
 
                 self.reward_buffer = 0 #jxy0709: now the dynamic boundary is not in order, should be adjusted.
-                print("temp safe...")
 
                 return VEG_trajectory
             
@@ -325,10 +311,8 @@ class VEG_Planner(object):
         dx = [1, 0, 0]
         ego_direction_xyz = np.matmul(rotation_mat_inverse, dx)
         ego_direction = math.atan2(ego_direction_xyz[1], ego_direction_xyz[0])
-        print("ego direction: ", ego_direction, "\n\n")
         ego_x = self._dynamic_map.ego_state.pose.pose.position.x
         ego_y = self._dynamic_map.ego_state.pose.pose.position.y
-        print("ego xy: ", ego_x, ego_y)
 
         ego_ffstate = get_frenet_state(self._dynamic_map.ego_state, self.ref_path, self.ref_path_tangets)
         state.append([ego_ffstate.s, ego_ffstate.d, ego_ffstate.vs, ego_ffstate.vd, 0, 0]) #jxy0711: check why d is negative originally?
@@ -341,8 +325,6 @@ class VEG_Planner(object):
         point_direction_diff_array = []
         for i in range(len(self._dynamic_boundary.boundary)):
             point_direction = math.atan2(self._dynamic_boundary.boundary[i].y-ego_y, self._dynamic_boundary.boundary[i].x-ego_x)
-            #print("point: ", self._dynamic_boundary.boundary[i].x, self._dynamic_boundary.boundary[i].y)
-            #print("point direction: ", point_direction)
             point_direction_diff_array.append(abs(point_direction - start_angle))
 
         start_point_index = 0
@@ -365,7 +347,6 @@ class VEG_Planner(object):
                 dynamic_index.append([point_ego_dist, i])
 
         dynamic_index.sort() #sort by key 0
-        print("dynamic_index: ", dynamic_index)
 
         for i in range(12):
             if i >= len(dynamic_index):
@@ -399,10 +380,6 @@ class VEG_Planner(object):
                 flag = int(self._dynamic_boundary.boundary[ii].flag*10) #socket transmit limit, must use int instead of float
 
                 state.append([s, d, vs, vd, omega, flag])
-
-                #point_direction = math.atan2(self._dynamic_boundary.boundary[ii].y-ego_y, self._dynamic_boundary.boundary[ii].x-ego_x)
-                #print("point sorted: ", self._dynamic_boundary.boundary[ii].x, self._dynamic_boundary.boundary[ii].y)
-                #print("point direction sorted: ", point_direction)
 
         # if collision
         collision = int(self._collision_signal)
@@ -457,19 +434,15 @@ class VEG_Planner(object):
         return RLpoint
 
     def generate_VEG_trajectory(self, rl_q, rule_q, rl_action, rule_trajectory_msg):
-        
-        print("rl_action", rl_action[0], rl_action[1])
-        print("rl_q", rl_q)
-        print("rule_q", rule_q)
 
         if rl_q - rule_q > THRESHOLD and rl_action[0] < 2333 and rl_action[1] < 2333:
             rl_action[1] = rl_action[1] + ACTION_SPACE_SYMMERTY
             self.kick_in_signal = self.rivz_element.draw_kick_in_circles(self._dynamic_map.ego_state.pose.pose.position.x,
                         self._dynamic_map.ego_state.pose.pose.position.y, 3.5)
-            print("RL kick in!")
+            rospy.loginfo("RL kick in!")
             return self._rule_based_trajectory_model_instance.trajectory_update_RL_kick(self._dynamic_map, rl_action)
         
         else:
             self.kick_in_signal = None
-            print("RL does not kick in!")
+            rospy.loginfo("RL does not kick in!")
             return rule_trajectory_msg
