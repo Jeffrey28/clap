@@ -7,10 +7,9 @@ import numpy as np
 
 from zzz_cognition_msgs.msg import MapState
 from zzz_driver_msgs.utils import get_speed
-from zzz_driver_msgs.msg import RigidBodyState
 from carla import Location, Rotation, Transform
 from zzz_common.geometry import dense_polyline2d
-from zzz_common.kinematics import get_frenet_state, get_frenet_state_boundary_point
+from zzz_common.kinematics import get_frenet_state
 
 from zzz_planning_msgs.msg import DecisionTrajectory
 from zzz_planning_decision_continuous_models.VEG.Werling_planner_RL import Werling
@@ -18,9 +17,14 @@ from zzz_planning_decision_continuous_models.common import rviz_display, convert
 from zzz_planning_decision_continuous_models.predict import predict
 
 # PARAMETERS
-THRESHOLD = -100000
+THRESHOLD = 0.2
 OBSTACLES_CONSIDERED = 3
 ACTION_SPACE_SYMMERTY = 15/3.6 
+
+# Should be the same with those in werling!
+KICK_IN_TIME = 2.1
+DT = 0.3
+KICK_IN_POINT = 7 # 2.1/0.3
 
 
 
@@ -41,11 +45,8 @@ class VEG_Planner(object):
         self.reference_path = None
         self.ref_path = None
         self.ref_path_tangets = None
-        self.trajectory_point_buffer = None
 
         self.rivz_element = rviz_display()
-        self.kick_in_signal = None
-
     
         if mode == "client":
             rospy.loginfo("Connecting to RL server...")
@@ -60,18 +61,24 @@ class VEG_Planner(object):
         
     def initialize(self, dynamic_map):
         try:
-            self.reference_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
-            ref_path_ori = convert_path_to_ndarray(self.reference_path)
-            self.ref_path = dense_polyline2d(ref_path_ori, 2)
-            self.ref_path_tangets = np.zeros(len(self.ref_path))
+            if self.reference_path is None: # a fixed reference path
+                self.reference_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
+                ref_path_ori = convert_path_to_ndarray(self.reference_path)
+                self.ref_path = dense_polyline2d(ref_path_ori, 2)
+                self.ref_path_tangets = np.zeros(len(self.ref_path))
             return True
         except:
-            print("------> VEG: Initialize fail ")
+            rospy.logdebug("------> VEG: Initialize fail ")
             return False
 
     def clear_buff(self, dynamic_map):
         self._rule_based_trajectory_model_instance.clear_buff(dynamic_map)
         self._collision_signal = False
+        self.reference_path = None
+        self.ref_path = None
+        self.ref_path_tangets = None
+        self.rivz_element.kick_in_signal = None
+
 
         # send done to OPENAI
         if self._has_clear_buff == False:
@@ -82,16 +89,15 @@ class VEG_Planner(object):
             else:  
                 leave_current_mmap = 1
 
-            collision = False
-            sent_RL_msg = []
-            for i in range(600):
-                # ego and obs state
-                sent_RL_msg.append(0)
+            collision = 0
+            sent_RL_msg = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] # ego and obs state
             sent_RL_msg.append(collision)
             sent_RL_msg.append(leave_current_mmap)
             sent_RL_msg.append(THRESHOLD) # threshold
             sent_RL_msg.append(0.0) # Rule_based_point.d
             sent_RL_msg.append(0.0 - ACTION_SPACE_SYMMERTY) # Rule_based_point.vs
+            print("-----------------------------",sent_RL_msg)
+
             self.sock.sendall(msgpack.packb(sent_RL_msg))
             try:
                 RLS_action = msgpack.unpackb(self.sock.recv(self._buffer_size))
@@ -101,49 +107,22 @@ class VEG_Planner(object):
             self._has_clear_buff = True
         return None
 
-    def trajectory_update(self, dynamic_map, dynamic_boundary):
+    def trajectory_update(self, dynamic_map):
         if self.initialize(dynamic_map):
             self._has_clear_buff = False
             self._dynamic_map = dynamic_map
-            self._dynamic_boundary = dynamic_boundary
 
             # wrap states
-            # sent_RL_msg = self.wrap_state()
-            sent_RL_msg = self.wrap_state_dynamic_boundary()
-            rospy.loginfo("wrapped state by dunamic boundary, state length %d", len(sent_RL_msg))
+            sent_RL_msg = self.wrap_state()
             
             # rule-based planner
             rule_trajectory_msg = self._rule_based_trajectory_model_instance.trajectory_update(dynamic_map)
             RLpoint = self.get_RL_point_from_trajectory(self._rule_based_trajectory_model_instance.last_trajectory_rule)
             sent_RL_msg.append(RLpoint.location.x)
             sent_RL_msg.append(RLpoint.location.y)
-
-            # trajectory buffer
-            
-            if self.trajectory_point_buffer is not None:
-                rospy.loginfo("trajectory point buffer length: %d", len(self.trajectory_point_buffer))
-                #TODO: temp max trajectory length max
-                for i in range(15):
-                    if i < len(self.trajectory_point_buffer):
-                        x = self.trajectory_point_buffer[i].pose.position.x
-                        y = self.trajectory_point_buffer[i].pose.position.y
-                        fake_state = RigidBodyState()
-                        fake_state.pose.pose.position.x = x
-                        fake_state.pose.pose.position.y = y
-                        trajectory_point_ffstate = get_frenet_state(fake_state, self.ref_path, self.ref_path_tangets)
-                        sent_RL_msg.append(trajectory_point_ffstate.s)
-                        sent_RL_msg.append(trajectory_point_ffstate.d)
-                    else:
-                        sent_RL_msg.append(0)
-                        sent_RL_msg.append(0)
-            else:
-                for i in range(15):
-                    sent_RL_msg.append(0)
-                    sent_RL_msg.append(0)
-
             print("-----------------------------",sent_RL_msg)
             self.sock.sendall(msgpack.packb(sent_RL_msg))
-            rospy.loginfo("sent RL msg succeeded!!!\n\n\n")
+            
 
             # received RL action and plan a RL trajectory
             try:
@@ -199,51 +178,6 @@ class VEG_Planner(object):
 
         return state
 
-    def wrap_state_dynamic_boundary(self):
-        # ego state: ego_x(0), ego_y(1), ego_vx(2), ego_vy(3)    
-        # boundary points: s d vs vd omega flag
-        state = [0, 0, 0, 0, 0, 0]
-
-        # ego state
-        ego_ffstate = get_frenet_state(self._dynamic_map.ego_state, self.ref_path, self.ref_path_tangets)
-        state[0] = ego_ffstate.s
-        state[1] = -ego_ffstate.d
-        state[2] = ego_ffstate.vs
-        state[3] = ego_ffstate.vd
-        state[4] = 0
-        state[5] = 0
-
-        for i in range(99):
-            #TODO: check the max boundary list length
-            if i >= len(self._dynamic_boundary.boundary):
-                for j in range(6):
-                    state.append(0)
-            else:
-                point_ffstate = get_frenet_state_boundary_point(self._dynamic_boundary.boundary[i], self.ref_path, self.ref_path_tangets)
-                s = point_ffstate.s
-                d = point_ffstate.d
-                vs = point_ffstate.vs
-                vd = point_ffstate.vd
-
-                state.append(s)
-                state.append(d)
-                state.append(vs)
-                state.append(vd)
-                state.append(self._dynamic_boundary.boundary[i].omega)
-                state.append(self._dynamic_boundary.boundary[i].flag)
-
-        # if collision
-        collision = int(self._collision_signal)
-        self._collision_signal = False
-        state.append(collision)
-
-        # if finish
-        leave_current_mmap = 0
-        state.append(leave_current_mmap)
-        state.append(THRESHOLD)
-
-        return state
-
     def found_closest_obstacles(self, num, dynamic_map):
         closest_obs = []
         obs_tuples = []
@@ -277,9 +211,9 @@ class VEG_Planner(object):
     def get_RL_point_from_trajectory(self, frenet_trajectory_rule):
         RLpoint = Transform()
 
-        if len(frenet_trajectory_rule.t) > 15:
-            RLpoint.location.x = frenet_trajectory_rule.d[15] #only works when DT param of werling is 0.15
-            RLpoint.location.y = frenet_trajectory_rule.s_d[15] - ACTION_SPACE_SYMMERTY
+        if len(frenet_trajectory_rule.t) > KICK_IN_POINT:
+            RLpoint.location.x = frenet_trajectory_rule.d[KICK_IN_POINT] #only works when DT param of werling is 0.15
+            RLpoint.location.y = frenet_trajectory_rule.s_d[KICK_IN_POINT] - ACTION_SPACE_SYMMERTY
         else:
             RLpoint.location.x = 0
             RLpoint.location.y = 0 - ACTION_SPACE_SYMMERTY
@@ -294,12 +228,9 @@ class VEG_Planner(object):
 
         if rl_q - rule_q > THRESHOLD and rl_action[0] < 2333 and rl_action[1] < 2333:
             rl_action[1] = rl_action[1] + ACTION_SPACE_SYMMERTY
-            self.kick_in_signal = self.rivz_element.draw_kick_in_circles(self._dynamic_map.ego_state.pose.pose.position.x,
-                        self._dynamic_map.ego_state.pose.pose.position.y, 3.5)
-            trajectory_buffer = self._rule_based_trajectory_model_instance.trajectory_update_RL_kick(self._dynamic_map, rl_action)
-            self.trajectory_point_buffer = trajectory_buffer.trajectory.poses
-            return trajectory_buffer
+            self.rivz_element.kick_in_signal = self.rivz_element.draw_kick_in_path(self._rule_based_trajectory_model_instance.last_trajectory_array)
+            return self._rule_based_trajectory_model_instance.trajectory_update_RL_kick(self._dynamic_map, rl_action)
                                
         else:
-            self.kick_in_signal = None
+            self.rivz_element.kick_in_signal = self.rivz_element.draw_rule_path(self._rule_based_trajectory_model_instance.last_trajectory_array_rule)
             return rule_trajectory_msg

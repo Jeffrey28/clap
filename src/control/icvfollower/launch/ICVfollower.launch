@@ -1,0 +1,6 @@
+<launch>
+  <node pkg="icvfollower" name="icv_carla_control"  type="icv_carla_control" output="screen">
+    
+    <param name="~deadacc" type="double" value="0.1"/>   
+  </node>
+</launch>

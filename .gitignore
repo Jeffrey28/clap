@@ -64,10 +64,14 @@ ref/
 # Catkin generated
 src/CMakeLists.txt
 
-src/driver/simulators/carla/carla_bridge
 
 src.zip
 
 1.txt
 
 get-pip.py
+
+.idea/*
+Record.txt
+
+src/driver/simulators/carla/carla_bridge

@@ -676,7 +676,7 @@ class TrafficJamChecker(AtomicBehavior):
     """
 
     SOFT_NUMBER_BLOCKS = 10  # 10 seconds
-    HARD_NUMBER_BLOCKS = 30  # 30 seconds
+    HARD_NUMBER_BLOCKS = 20  # 30 seconds
 
     MINIMUM_DISTANCE = 5.0  # meters
 
@@ -710,8 +710,9 @@ class TrafficJamChecker(AtomicBehavior):
     def update(self):
         master_scenario_command = self.blackboard.get('master_scenario_command')
         if master_scenario_command and master_scenario_command == 'scenarios_stop_request':
-            new_status = py_trees.common.Status.SUCCESS
-            return new_status
+            # new_status = py_trees.common.Status.SUCCESS
+            # return new_status
+            pass
         else:
             new_status = py_trees.common.Status.RUNNING
 

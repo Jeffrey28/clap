@@ -511,17 +511,17 @@ class ChallengeEvaluator(object):
         random = True
 
         if town_name == 'Town01' or town_name == 'Town02':
-            amount = 120
+            amount = 10
         elif town_name == 'Town03' or town_name == 'Town05':
-            amount = 120
+            amount = 20
         elif town_name == 'Town04':
-            amount = 200
+            amount = 10
         elif town_name == 'Town06' or town_name == 'Town07':
-            amount = 150
+            amount = 10
         elif town_name == 'Town08':
-            amount = 180
+            amount = 10
         elif town_name == 'Town09':
-            amount = 350
+            amount = 10
         else:
             amount = 1
 
@@ -674,11 +674,6 @@ class ChallengeEvaluator(object):
             for i, _ in enumerate(self.list_scenarios):
                 if self.debug == 1:
                     behavior = self.list_scenarios[i].scenario.scenario_tree.children[0]
-                    if behavior.tip():
-                        print("{} {} {} {}".format(self.list_scenarios[i].scenario.scenario_tree.name,
-                                                   self.list_scenarios[i].scenario.scenario_tree.status,
-                                                   behavior.tip().name,
-                                                   behavior.tip().status))
                     if (behavior and behavior.tip() and behavior.tip().name !=
                         "InTriggerDistanceToLocationAlongRoute" and self.list_scenarios[
                         i].scenario.scenario_tree.name != "MasterScenario" and
@@ -1236,10 +1231,10 @@ class ChallengeEvaluator(object):
 
         for route_idx, route_description in enumerate(route_descriptions_list):
             
-            # if route_description['town_name'] == 'Town04':
-            #     pass
-            # else:
-            #     continue
+            if route_description['town_name'] == 'Town03':
+                pass
+            else:
+                continue
 
             for repetition in range(self.repetitions):
                 # check if we have enough wall time to run this specific route

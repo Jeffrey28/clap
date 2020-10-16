@@ -10,7 +10,7 @@ Header header
 bool in_junction # = True
 
 # Target lane index at the end of the section.
-int8 target_lane_index # TODO(zyxin): Change to a list to support multiple lane turning
+int8[] exit_lane_index
 
 # Lanes if it's in a structured road, should be sorted by ascending index
 # The index is starting from right most lane, i.e. the right most lane is indexed as 0
@@ -22,3 +22,4 @@ geometry_msgs/Polygon drivable_area
 # Next unit
 geometry_msgs/Polygon next_drivable_area
 Lane[] next_lanes
+int8 next_road_id

@@ -1,2 +1,4 @@
-from .local_map import LocalMap
-from .carla_map import CarlaMap
+# from .local_map import LocalMap
+# from .native_map import NativeMap
+
+from .ShougangMap import ShougangMap

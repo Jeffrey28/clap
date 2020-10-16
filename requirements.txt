@@ -1,10 +1,16 @@
 easydict
-cython >= 0.29
+cython 
 utm
 intervaltree
 plotly
 dash
 filterpy
-pcl.py
 scipy
+numpy
 shapely
+cvxopt
+gym
+networkx
+msgpack
+mpi4py
+joblib

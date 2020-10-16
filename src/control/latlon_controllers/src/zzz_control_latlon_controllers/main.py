@@ -33,8 +33,8 @@ class MainController():
     def update_pose(self, pose):
         with self._ego_state_lock:
             self.ego_state = pose.state
-           
-    def ready_for_control(self, short_distance_thres = 2, less_points_thres = 3):
+
+    def ready_for_control(self, short_distance_thres = 5):
         if self.desired_trajectory is None or len(self.desired_trajectory.poses) == 0:
             rospy.logdebug("Haven't recevied trajectory")
             return False
@@ -44,12 +44,7 @@ class MainController():
         d = np.linalg.norm(ego_loc - last_loc)
 
         if d < short_distance_thres:
-            rospy.loginfo("Vehicle stopped since it reached target point (dist:%.3f)", d)
-            return False
-        
-        traj_len = len(self.desired_trajectory.poses)
-        if traj_len < less_points_thres:
-            rospy.loginfo("Vehicle stopped because received trajectory points are too few (traj_len:%d)", traj_len)
+            rospy.loginfo("Vehicle stopped since it reached target point %f %f (dist:%.3f)", self.desired_trajectory.poses[-1].pose.position.x, self.desired_trajectory.poses[-1].pose.position.y, d)
             return False
         
         return True
@@ -68,22 +63,22 @@ class MainController():
             
             return control_msg
 
-        #rospy.logdebug("received target speed:%f, current_speed: %f", self.desired_speed, get_speed(self.ego_state))
+        rospy.logdebug("received target speed:%f, current_speed: %f", self.desired_speed, get_speed(self.ego_state))
         
         ego_pose = self.ego_state.pose.pose
 
-        # with self._trajectory_lock:
-        target_speed = self.desired_speed
-        trajectory = self.desired_trajectory
-        current_speed = get_speed(self.ego_state)
+        with self._trajectory_lock:
+            target_speed = self.desired_speed
+            trajectory = self.desired_trajectory
+            current_speed = get_speed(self.ego_state)
 
-        accel = self._lon_controller.run_step(target_speed, current_speed)
-        steer = self._lat_controller.run_step(ego_pose, trajectory, current_speed)
+            accel = self._lon_controller.run_step(target_speed, current_speed)
+            steer = self._lat_controller.run_step(ego_pose, trajectory, current_speed)
 
-        rospy.logdebug("accel = %f, steer = %f ***", accel, steer)
+            rospy.logdebug("accel = %f, steer = %f ***", accel, steer)
 
-        control_msg = ControlCommand()
-        control_msg.accel = accel
-        control_msg.steer = steer
+            control_msg = ControlCommand()
+            control_msg.accel = accel
+            control_msg.steer = steer
 
-        return control_msg
+            return control_msg
