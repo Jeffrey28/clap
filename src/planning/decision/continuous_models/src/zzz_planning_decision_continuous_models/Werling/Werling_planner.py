@@ -389,7 +389,7 @@ class Werling(object):
             #rospy.loginfo("other time: ", t11 - t10)
             #rospy.loginfo("count time: ", count_time)
             if not check_collision_flag:
-                rospy.loginfo("check collision fail!\n")
+                #rospy.loginfo("check collision fail!\n")
                 continue
 
             okind.append(i)
