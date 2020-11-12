@@ -323,7 +323,8 @@ class PolylineTrajectory(object):
 
         central_path = self.convert_path_to_ndarray(target_lane.map_lane.central_path_points)
 
-        # if ego vehicle is on the target path
+        # jxy20201112: if ego vehicle is on the target path, just output the center line
+        # this may not work in non lane keeping scenario, making it just go back to center line
         # works for lane change, lane follow and reference path follow
         dense_centrol_path = dense_polyline2d(central_path, resolution)
         nearest_dis, nearest_idx, _ = dist_from_point_to_polyline2d(ego_x, ego_y, dense_centrol_path)
@@ -332,9 +333,10 @@ class PolylineTrajectory(object):
         if nearest_dis > rectify_thres:
             if dynamic_map.model == MapState.MODEL_MULTILANE_MAP and target_lane_index != -1:
                 rectify_dt = abs(dynamic_map.mmap.ego_lane_index - target_lane_index)*lc_dt
+                #jxy: considering changing many lanes. However, lateral decision only allow to change 1 lane.
             else:
                 rectify_dt = nearest_dis/lc_v
-            return self.generate_smoothen_lane_change_trajectory(dynamic_map, target_lane, rectify_dt, desired_speed)
+            return self.generate_smoothen_lane_change_trajectory(dynamic_map, target_lane, rectify_dt, desired_speed) #jxy202011: work here
         else:
             front_path = dense_centrol_path[nearest_idx:]
             dis_to_ego = np.cumsum(np.linalg.norm(np.diff(front_path, axis=0), axis = 1))

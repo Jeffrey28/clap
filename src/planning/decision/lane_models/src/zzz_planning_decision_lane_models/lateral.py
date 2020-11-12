@@ -40,6 +40,8 @@ class LaneUtility(object):
 
     def generate_lane_change_index(self, change_lane_thres = 0.5):
 
+        #jxy: cchange to a safe and faster lane, may add global exiting in the future
+
         ego_lane_index = int(round(self.dynamic_map.mmap.ego_lane_index))
         current_lane_utility = self.lane_utility(ego_lane_index) + change_lane_thres
 
@@ -57,7 +59,7 @@ class LaneUtility(object):
         rospy.logdebug("left_utility = %f, ego_utility = %f, right_utility = %f",
             left_lane_utility, current_lane_utility, right_lane_utility)
 
-        if right_lane_utility > current_lane_utility and right_lane_utility >= left_lane_utility:
+        if right_lane_utility > current_lane_utility and right_lane_utility >= left_lane_utility: #jxy: 3 scores, decide which lane to go
             return ego_lane_index - 1
 
         if left_lane_utility > current_lane_utility and left_lane_utility > right_lane_utility:
@@ -68,7 +70,7 @@ class LaneUtility(object):
     def lane_utility(self, lane_index):
 
         available_speed = self.longitudinal_model_instance.longitudinal_speed(lane_index)
-        exit_lane_index = self.dynamic_map.mmap.target_lane_index
+        exit_lane_index = self.dynamic_map.mmap.target_lane_index #jxy: what's this? currently always -1. TODO: set by global path
         distance_to_end = self.dynamic_map.mmap.distance_to_junction
         # XXX: Change 260 to a adjustable parameter?
         utility = available_speed + 1/(abs(exit_lane_index - lane_index)+1) #*max(0,(260-distance_to_end))
@@ -89,7 +91,7 @@ class LaneUtility(object):
         for lane in self.dynamic_map.mmap.lanes:
             if lane.map_lane.index == target_index:
                 if len(lane.front_vehicles) > 0:
-                    front_vehicle = lane.front_vehicles[0]
+                    front_vehicle = lane.front_vehicles[0] #jxy: just the boundary, only one vehicle considered. Enough for safety.
                 if len(lane.rear_vehicles) > 0:
                     rear_vehicle = lane.rear_vehicles[0]
                 break
@@ -109,7 +111,7 @@ class LaneUtility(object):
             # TODO: Change to real distance in lane
             d_front = np.linalg.norm(front_vehicle_location - ego_vehicle_location)
             front_v = get_speed(front_vehicle.state)
-            if d_front > max(10 + 3*(ego_v-front_v), 10):
+            if d_front > max(10 + 3*(ego_v-front_v), 10): #jxy: speeded boundary
                 front_safe = True
         
 

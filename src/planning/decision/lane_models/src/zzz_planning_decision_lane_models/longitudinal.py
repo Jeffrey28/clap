@@ -22,6 +22,9 @@ class IDM(object):
 
     def longitudinal_speed(self, target_lane_index, traffic_light = False):
 
+        #jxy: this target lane is not the exiting lane, just the index of the lane whose speed is about to be updated.
+        #the logic is simple, and clearly shown in the code!
+
         target_lane = None
 
         if target_lane_index == -1:
@@ -31,7 +34,7 @@ class IDM(object):
             rospy.logwarn("cannot find neighbor lane, lane_index: %d", target_lane_index)
             return 0 
 
-        target_lane = self.dynamic_map.mmap.lanes[target_lane_index]
+        target_lane = self.dynamic_map.mmap.lanes[target_lane_index] #speed of the lane, if somebody cuts in, reduce the speed.
 
         idm_speed = self.IDM_speed_in_lane(target_lane)
         # Response to front vehicle in left lane
