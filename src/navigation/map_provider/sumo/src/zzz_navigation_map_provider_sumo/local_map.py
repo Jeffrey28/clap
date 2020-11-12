@@ -149,6 +149,7 @@ class LocalMap(object):
         map_x, map_y = self.convert_to_map_XY(self._ego_vehicle_x, self._ego_vehicle_y)
 
         lanes = self._hdmap.getNeighboringLanes(map_x, map_y, self._lane_search_radius, includeJunctions=False)
+
         if len(lanes) > 0:
             _, closestLane = min((dist, lane) for lane, dist in lanes)
             new_edge = closestLane.getEdge()

@@ -375,12 +375,12 @@ class DrivingSpaceConstructor:
                     z = obs.state.pose.pose.orientation.z
                     w = obs.state.pose.pose.orientation.w
 
-                    #rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
-                    #rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
+                    rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
+                    rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
 
                     vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
-                    #vel_world = np.matmul(rotation_mat, vel_obs)
-                    vel_world = vel_obs
+                    vel_world = np.matmul(rotation_mat, vel_obs)
+                    #vel_world = vel_obs
                     #check if it should be reversed
                     obs_vx_world = vel_world[0]
                     obs_vy_world = vel_world[1]

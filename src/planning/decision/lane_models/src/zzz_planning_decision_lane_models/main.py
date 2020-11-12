@@ -14,6 +14,8 @@ from zzz_planning_decision_lane_models.local_trajectory import PolylineTrajector
 # Make lat lon model as parameter
 
 class MainDecision(object):
+    #jxy20201112: first step: transfer from dynamic map to boundary
+    #second step: fix those cognition problems (junction-road, lane num change, non lane keeping scenario)
     def __init__(self, lon_decision=None, lat_decision=None, local_trajectory=None):
         self._dynamic_map_buffer = None
         self._static_map_buffer = None
@@ -44,7 +46,7 @@ class MainDecision(object):
             return None
         
         trajectory = None
-        changing_lane_index, desired_speed = self._lateral_model_instance.lateral_decision(dynamic_map)
+        changing_lane_index, desired_speed = self._lateral_model_instance.lateral_decision(dynamic_map) #jxy202011: work here
         rospy.loginfo("changing lane index: %d", changing_lane_index)
         if desired_speed < 0: # TODO: clean this
             desired_speed = 0
@@ -56,7 +58,7 @@ class MainDecision(object):
             return None
             # trajectory = self._local_trajectory_instance_for_ref.get_trajectory(dynamic_map, changing_lane_index, desired_speed)#FIXME(ksj)
         else:
-            trajectory = self._local_trajectory_instance.get_trajectory(dynamic_map, changing_lane_index, desired_speed)
+            trajectory = self._local_trajectory_instance.get_trajectory(dynamic_map, changing_lane_index, desired_speed) #jxy202011: work here
 
 
         msg = DecisionTrajectory()

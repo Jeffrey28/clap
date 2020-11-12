@@ -996,10 +996,10 @@ def calculate_drivable_area(tstates):
             lane = tstates.static_map.lanes[i]                
             if i != len(tstates.static_map.lanes) - 1:
                 lane_section_points_generation(lane_sections[i+1, 0], lane_sections[i, 0], lane_sections[i+1, 2], \
-                    lane_sections[i+1, 3], lane_sections[i, 4], lane_sections[i, 5], lane.left_boundaries, tstates)
+                    lane_sections[i+1, 3], lane_sections[i, 2], lane_sections[i, 3], lane.left_boundaries, tstates)
                 if i != 0:
                     lane_section_points_generation(lane_sections[i, 0], lane_sections[i-1, 0], lane_sections[i, 2], \
-                    lane_sections[i, 3], lane_sections[i-1, 4], lane_sections[i-1, 5], lane.right_boundaries, tstates)
+                    lane_sections[i, 3], lane_sections[i-1, 2], lane_sections[i-1, 3], lane.right_boundaries, tstates)
 
         #close the figure
         if len(tstates.drivable_area) > 0:
