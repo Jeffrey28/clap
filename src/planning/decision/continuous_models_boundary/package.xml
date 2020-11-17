@@ -1,5 +1,5 @@
 <package format="2">
-  <name>zzz_planning_decision_continuous_models</name>
+  <name>zzz_planning_decision_continuous_models_boundary</name>
   <version>0.1.0</version>
   <description>
     The main decision part

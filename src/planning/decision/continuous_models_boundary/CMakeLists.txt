@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(zzz_planning_decision_continuous_models)
+project(zzz_planning_decision_continuous_models_boundary)
 
 find_package(catkin REQUIRED)
 catkin_package()
