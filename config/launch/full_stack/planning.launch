@@ -43,7 +43,7 @@
     </node> -->
 
 
-    <node pkg="zzz_planning_decision_continuous_models_boundary" type="continuous_utility" respawn="true"
+    <node pkg="zzz_planning_decision_continuous_models" type="continuous_utility" respawn="true"
           name="continuous_utility" output="screen" ns="/zzz/planning">
     </node>
 

@@ -106,7 +106,7 @@ class NearestLocator:
                 dlane = cognition_default(LaneState)
                 dlane.map_lane = lane
                 dynamic_map.mmap.lanes.append(dlane)
-            dynamic_map.mmap.target_lane_index = static_map.target_lane_index
+            dynamic_map.mmap.exit_lane_index[0] = static_map.exit_lane_index[0]
 
         # Locate vehicles onto the junction map
         # TODO: Calculate frenet coordinate for objects in here or in put_buffer?

@@ -57,8 +57,8 @@ class DrivingSpaceConstructor:
         assert type(static_map) == Map
         with self._static_map_lock:
             self._static_map_buffer = static_map
-            rospy.loginfo("Updated Local Static Map: lanes_num = %d, in_junction = %d, target_lane_index = %d",
-                len(static_map.lanes), int(static_map.in_junction), static_map.target_lane_index)
+            rospy.loginfo("Updated Local Static Map: lanes_num = %d, in_junction = %d, exit_lane_index = %d",
+                len(static_map.lanes), int(static_map.in_junction), static_map.exit_lane_index[0])
 
     def receive_object_list(self, object_list):
         assert type(object_list) == TrackingBoxArray
@@ -375,16 +375,16 @@ class DrivingSpaceConstructor:
                     z = obs.state.pose.pose.orientation.z
                     w = obs.state.pose.pose.orientation.w
 
-                    rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
-                    rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
+                    #rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
+                    #rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
 
                     vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
-                    vel_world = np.matmul(rotation_mat, vel_obs)
+                    #vel_world = np.matmul(rotation_mat, vel_obs)
                     #vel_world = vel_obs
                     #check if it should be reversed
-                    obs_vx_world = vel_world[0]
-                    obs_vy_world = vel_world[1]
-                    obs_vz_world = vel_world[2]
+                    obs_vx_world = vel_obs[0]
+                    obs_vy_world = vel_obs[1]
+                    obs_vz_world = vel_obs[2]
 
                     startpoint = Point()
                     endpoint = Point()

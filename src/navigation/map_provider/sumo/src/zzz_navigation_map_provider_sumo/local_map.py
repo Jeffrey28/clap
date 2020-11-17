@@ -196,7 +196,7 @@ class LocalMap(object):
         '''
         init_static_map = Map()
         init_static_map.in_junction = True
-        init_static_map.target_lane_index = -1
+        init_static_map.exit_lane_index.append(-1) 
         return init_static_map
 
     def update_static_map(self, update_mode):
@@ -230,9 +230,9 @@ class LocalMap(object):
         end = time.time()
 
         rospy.logdebug("Updated static map info: update mode = %d, lane_number = %d, in_junction = %d, current_edge_id = %s, \
-            target_lane_index = %s, time consume = %f, update_lane_list time = %f",
+            exit_lane_index = %s, time consume = %f, update_lane_list time = %f",
             update_mode, len(self.static_local_map.lanes), int(self.static_local_map.in_junction),
-            self._current_edge_id, self.static_local_map.target_lane_index, 1000*(end-start), 1000*(middle-start))
+            self._current_edge_id, self.static_local_map.exit_lane_index[0], 1000*(end-start), 1000*(middle-start))
 
     def update_next_lanes(self, step_length = 20):
 
@@ -448,6 +448,7 @@ class LocalMap(object):
                 lane_wrapped.left_boundaries.append(left_bound)
                 lane_wrapped.right_boundaries.append(right_bound)
 
+            lane_wrapped.speed_limit = 35
 
         return lane_wrapped
 
@@ -473,8 +474,8 @@ class LocalMap(object):
                 connections_outgoing = lane.getOutgoing()
                 for connection in connections_outgoing:
                     if connection.getToLane().getID() == target_lane_id:
-                        self.static_local_map.target_lane_index = lane.getIndex()
-                        rospy.logdebug("Finded next target lane id = %s", self.static_local_map.target_lane_index)
+                        self.static_local_map.exit_lane_index.append(lane.getIndex())
+                        rospy.logdebug("Finded next target lane id = %s", self.static_local_map.exit_lane_index[0])
                         return
 
         # FIXME(zhcao): reference path match target lane
@@ -489,5 +490,5 @@ class LocalMap(object):
         for lane in self.static_local_map.lanes:
             lane.index = lane.index - first_index
 
-        if self.static_local_map.target_lane_index >= 0:
-            self.static_local_map.target_lane_index = self.static_local_map.target_lane_index - first_index
+        if self.static_local_map.exit_lane_index[0] >= 0:
+            self.static_local_map.exit_lane_index[0] = self.static_local_map.exit_lane_index[0] - first_index
