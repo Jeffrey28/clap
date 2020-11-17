@@ -12,7 +12,7 @@ class MainDecision(object):
         assert type(dynamic_map) == MapState
         self._dynamic_map_buffer = dynamic_map
 
-    def update_trajectory(self, close_to_junction=40):
+    def update_trajectory(self, close_to_junction=5):
 
         if self._dynamic_map_buffer is None:
             return None

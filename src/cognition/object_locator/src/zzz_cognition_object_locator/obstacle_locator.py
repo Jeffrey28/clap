@@ -3,12 +3,14 @@ import rospy
 from easydict import EasyDict as edict
 from threading import Lock
 import copy
+import math
 
 from zzz_cognition_msgs.msg import LaneState, MapState, RoadObstacle
 from zzz_cognition_msgs.utils import convert_tracking_box
 from zzz_cognition_msgs.utils import default_msg as cognition_default
 from zzz_common.geometry import dist_from_point_to_polyline2d, wrap_angle
 from zzz_common.kinematics import get_frenet_state
+from zzz_common.utils import quaternion_to_eular, calc_vehicle_corners
 from zzz_driver_msgs.msg import RigidBodyStateStamped
 from zzz_driver_msgs.utils import get_speed, get_yaw
 from zzz_navigation_msgs.msg import Lane, Map
@@ -17,7 +19,7 @@ from zzz_perception_msgs.msg import (DetectionBoxArray, ObjectSignals,
                                      TrackingBoxArray)
 
 class NearestLocator:
-    def __init__(self, lane_dist_thres=5):
+    def __init__(self, lane_dist_thres=5): 
         
         self._static_map_lock = Lock()
         self._static_map_buffer = None
@@ -43,8 +45,6 @@ class NearestLocator:
         assert type(static_map) == Map
         with self._static_map_lock:
             self._static_map_buffer = static_map
-            rospy.loginfo("Updated Local Static Map: lanes_num = %d, in_junction = %d, target_lane_index = %d",
-                len(static_map.lanes), int(static_map.in_junction), static_map.target_lane_index)
 
     def receive_object_list(self, object_list):
         assert type(object_list) == TrackingBoxArray
@@ -97,7 +97,7 @@ class NearestLocator:
         dynamic_map.ego_state = tstates.ego_state.state
 
         if static_map.in_junction or len(static_map.lanes) == 0:
-            rospy.logdebug("In junction due to static map report junction location")
+            rospy.logdebug("Cognition: In junction due to static map report junction location")
             dynamic_map.model = MapState.MODEL_JUNCTION_MAP
             dynamic_map.jmap.drivable_area = static_map.drivable_area
         else:
@@ -106,7 +106,7 @@ class NearestLocator:
                 dlane = cognition_default(LaneState)
                 dlane.map_lane = lane
                 dynamic_map.mmap.lanes.append(dlane)
-            dynamic_map.mmap.exit_lane_index[0] = static_map.exit_lane_index[0]
+            dynamic_map.mmap.exit_lane_index = copy.deepcopy(static_map.exit_lane_index)
 
         # Locate vehicles onto the junction map
         # TODO: Calculate frenet coordinate for objects in here or in put_buffer?
@@ -115,6 +115,8 @@ class NearestLocator:
         # Locate vehicles onto the multilane map
         if dynamic_map.model == MapState.MODEL_MULTILANE_MAP:
             self.locate_ego_vehicle_in_lanes(tstates)
+        
+        if tstates.dynamic_map.model == MapState.MODEL_MULTILANE_MAP:
             self.locate_surrounding_objects_in_lanes(tstates)
             self.locate_stop_sign_in_lanes(tstates)
             self.locate_speed_limit_in_lanes(tstates)
@@ -161,9 +163,16 @@ class NearestLocator:
             la, lb = abs(closest_lane_dist), abs(second_closest_lane_dist)
             return (b*la + a*lb)/(lb + la)
 
-    def locate_objects_in_junction(self, tstates):
+    def locate_objects_in_junction(self, tstates, danger_area = 80):
         tstates.dynamic_map.jmap.obstacles = []
+               
         for obj in tstates.surrounding_object_list:
+            dist_to_ego = math.sqrt(math.pow((obj.state.pose.pose.position.x - tstates.ego_state.state.pose.pose.position.x),2) 
+                + math.pow((obj.state.pose.pose.position.y - tstates.ego_state.state.pose.pose.position.y),2))
+
+            if dist_to_ego > danger_area:
+                continue
+
             if tstates.dynamic_map.model == MapState.MODEL_MULTILANE_MAP:
                 obj.lane_index = self.locate_object_in_lane(obj.state, tstates)
             else:
@@ -171,7 +180,10 @@ class NearestLocator:
             tstates.dynamic_map.jmap.obstacles.append(obj)
 
     # TODO: adjust lane_end_dist_thres to class variable
-    def locate_ego_vehicle_in_lanes(self, tstates, lane_end_dist_thres=1.5, lane_dist_thres=5):
+    def locate_ego_vehicle_in_lanes(self, tstates, 
+                            lane_end_dist_thres=1.5,
+                            lane_head_thres = 4, 
+                            lane_dist_thres = 5):
         dist_list = np.array([dist_from_point_to_polyline2d(
             tstates.ego_state.state.pose.pose.position.x, tstates.ego_state.state.pose.pose.position.y,
             lane, return_end_distance=True)
@@ -180,13 +192,16 @@ class NearestLocator:
         ego_lane_index = self.locate_object_in_lane(tstates.ego_state.state, tstates)
         ego_lane_index_rounded = int(round(ego_lane_index))
 
-        # print("ego_lane_index=",ego_lane_index)
-
+        if ego_lane_index_rounded < 0 or ego_lane_index_rounded > len(tstates.static_map_lane_path_array) - 1:
+            tstates.dynamic_map.model = MapState.MODEL_JUNCTION_MAP
+            rospy.logwarn("Cognition: Ego_lane_index_error")
+            return
+        
         self._ego_vehicle_distance_to_lane_head = dist_list[:, 3]
         self._ego_vehicle_distance_to_lane_tail = dist_list[:, 4]
         if ego_lane_index_rounded < 0 or self._ego_vehicle_distance_to_lane_tail[ego_lane_index_rounded] <= lane_end_dist_thres:
             # Drive into junction, wait until next map
-            rospy.logdebug("In junction due to close to intersection, ego_lane_index = %f, dist_to_lane_tail = %f", ego_lane_index, self._ego_vehicle_distance_to_lane_tail[int(ego_lane_index)])
+            rospy.logdebug("Cognition: Ego vehicle close to intersection, ego_lane_index = %f, dist_to_lane_tail = %f", ego_lane_index, self._ego_vehicle_distance_to_lane_tail[int(ego_lane_index)])
             tstates.dynamic_map.model = MapState.MODEL_JUNCTION_MAP
             # TODO: Calculate frenet coordinate here or in put_buffer?
             return

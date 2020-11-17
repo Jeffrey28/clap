@@ -10,7 +10,6 @@ def default_msg(msg_type):
     '''
     if msg_type == LaneState:
         msg = LaneState()
-        msg.stop_distance = float('inf')
     elif msg_type == MapState:
         msg = MapState()
     elif msg_type == RoadObstacle:

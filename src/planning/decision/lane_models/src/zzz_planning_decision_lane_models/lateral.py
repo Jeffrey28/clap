@@ -26,13 +26,17 @@ class LaneUtility(object):
 
     def generate_lane_change_index(self):
 
-        candidate_lanes = self.get_candidate_lanes()
+        ego_lane_index = int(round(self.dynamic_map.mmap.ego_lane_index))
+
+        #candidate_lanes = self.get_candidate_lanes(ego_lane_index) #jxy: in this way, it cannot change to the left lane.
+        candidate_lanes = [ego_lane_index - 1, ego_lane_index, ego_lane_index + 1]
         candidate_lanes_utility = [self.lane_utility(int(lane_index)) for lane_index in candidate_lanes]
         target_lane = int(candidate_lanes[np.argmax(np.array(candidate_lanes_utility))])
 
         return target_lane
 
     def get_candidate_lanes(self, available_lane_change_range=1.2):
+        print self.dynamic_map.mmap.ego_lane_index
         candidate_lanes = np.arange(
             math.ceil(self.dynamic_map.mmap.ego_lane_index - available_lane_change_range),
             math.floor(self.dynamic_map.mmap.ego_lane_index + available_lane_change_range)
@@ -48,6 +52,7 @@ class LaneUtility(object):
             return -1
 
         available_speed = self.longitudinal_model_instance.longitudinal_speed(lane_index)
+        rospy.loginfo("available speed at lane %d: %f\n\n\n\n", lane_index, available_speed)
         exit_lanes = np.array(self.dynamic_map.mmap.exit_lane_index)
         mandatory_lanes_num = min(abs(exit_lanes - lane_index))
         distance_to_end = self.dynamic_map.mmap.distance_to_junction

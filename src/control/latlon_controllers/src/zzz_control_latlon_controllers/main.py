@@ -34,7 +34,7 @@ class MainController():
         with self._ego_state_lock:
             self.ego_state = pose.state
 
-    def ready_for_control(self, short_distance_thres = 5):
+    def ready_for_control(self, short_distance_thres = 2):
         if self.desired_trajectory is None or len(self.desired_trajectory.poses) == 0:
             rospy.logdebug("Haven't recevied trajectory")
             return False
@@ -58,7 +58,7 @@ class MainController():
         
         if not self.ego_state or not self.ready_for_control():
             control_msg = ControlCommand()
-            control_msg.accel = -1
+            control_msg.accel = -0.5
             control_msg.steer = 0
             
             return control_msg

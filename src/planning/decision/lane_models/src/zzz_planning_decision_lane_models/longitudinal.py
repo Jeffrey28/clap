@@ -8,16 +8,16 @@ from zzz_cognition_msgs.msg import RoadObstacle
 class IDM(object):
 
     def __init__(self):
-        running_mode = 'xiaopeng'
+        running_mode = 'carla' #jxy:xpg3 xiaopeng
         try:
             running_mode = rospy.get_param("/running_mode")
         except:
             rospy.logwarn("Planning (lanes): Xiaopeng Mode")
 
-        self.T = 1.8
+        self.T = 1.6 #jxy: xpg3 1.8
         self.g0 = 7
         self.a = 2.73 
-        self.b = 1.65 + 5
+        self.b = 1.65 #jxy: xpg3 + 5
         self.delta = 4
         self.decision_dt = 0.75
         self.dynamic_map = None
@@ -110,6 +110,14 @@ class IDM(object):
 
         else:
             acc = a * (1 - pow(v/v0, delta))
+
+        print a
+        print v
+        print v0
+        print acc
+        print self.decision_dt
+
+        rospy.loginfo("idm speed: %f", max(0, v + acc*self.decision_dt))
 
         return max(0, v + acc*self.decision_dt)
 

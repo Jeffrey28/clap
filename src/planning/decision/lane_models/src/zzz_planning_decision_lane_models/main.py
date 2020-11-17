@@ -24,6 +24,8 @@ class MainDecision(object):
 
         self._dynamic_map_lock = Lock()
 
+        self._cleared_buff_flag = 0
+
     def receive_dynamic_map(self, dynamic_map):
         assert type(dynamic_map) == MapState
         self._dynamic_map_buffer = dynamic_map
@@ -39,16 +41,20 @@ class MainDecision(object):
         else:
             dynamic_map = self._dynamic_map_buffer
 
-        if dynamic_map.model == dynamic_map.MODEL_JUNCTION_MAP: 
+        if dynamic_map.model == dynamic_map.MODEL_JUNCTION_MAP: #jxy: enter junction, ready to enter another road
 
-            if dynamic_map.jmap.distance_to_lanes < close_to_lane:
+            if dynamic_map.jmap.distance_to_lanes < close_to_lane and self._cleared_buff_flag == 1:
                 self._local_trajectory_instance.build_frenet_lane(dynamic_map)
                 return None
             else:
                 self._local_trajectory_instance.clean_frenet_lane()
+                self._cleared_buff_flag = 1
                 return None
 
-        if len(self._local_trajectory_instance.lanes) == 0:
+        else:
+            self._cleared_buff_flag = 0
+
+        if len(self._local_trajectory_instance.lanes) == 0: #jxy: initialize
             self._local_trajectory_instance.build_frenet_lane(dynamic_map)
             return None
 

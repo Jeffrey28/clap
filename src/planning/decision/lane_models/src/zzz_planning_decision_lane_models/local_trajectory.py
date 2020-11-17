@@ -455,11 +455,13 @@ class Werling_planner(object):
         
         dx = path[1].position.x - path[0].position.x
         dy = path[1].position.y - path[0].position.y
+
+        dlen = math.sqrt(dx*dx + dy*dy)
         
         for i in range(1,30):
             point = LanePoint()
-            point.position.x = path[0].position.x - dx
-            point.position.y = path[0].position.y - dy
+            point.position.x = path[0].position.x - dx / dlen * 0.5
+            point.position.y = path[0].position.y - dy / dlen * 0.5
             path.insert(0, point)
 
         return path
