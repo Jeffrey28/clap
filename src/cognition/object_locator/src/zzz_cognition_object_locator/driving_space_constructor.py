@@ -19,7 +19,7 @@ from zzz_cognition_msgs.msg import DrivingSpace, DynamicBoundary, DynamicBoundar
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
 from zzz_driver_msgs.utils import get_speed, get_yaw
-from drivable_area import calculate_drivable_area, calculate_next_drivable_area
+from drivable_area import calculate_drivable_area
 
 #jxy 20191125: first output the driving space, then use the driving space for cognition. 
 #For this demo version, it will be a unified module, in future versions, this will be split into 2 modules.
@@ -89,7 +89,7 @@ class DrivingSpaceConstructor:
             return False
 
         with self._ego_vehicle_state_lock:
-            tstates.ego_vehicle_state = copy.deepcopy(self._ego_vehicle_state_buffer) 
+            tstates.ego_vehicle_state = copy.deepcopy(self.     _ego_vehicle_state_buffer) 
 
         # Update buffer information
         tstates.surrounding_object_list = copy.deepcopy(self._surrounding_object_list_buffer or [])
@@ -119,7 +119,7 @@ class DrivingSpaceConstructor:
             self.locate_stop_sign_in_lanes(tstates)
             self.locate_speed_limit_in_lanes(tstates)
             calculate_drivable_area(tstates)
-            calculate_next_drivable_area(tstates)
+            #calculate_next_drivable_area(tstates)
         
         self._driving_space.header.frame_id = "map"
         self._driving_space.header.stamp = rospy.Time.now()

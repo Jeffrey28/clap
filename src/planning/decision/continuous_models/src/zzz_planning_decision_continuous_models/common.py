@@ -35,8 +35,8 @@ class rviz_display():
                 tempmarker.action = Marker.ADD
                 tempmarker.scale.x = 0.05
                 tempmarker.color.r = 0.0
-                tempmarker.color.g = 1.0
-                tempmarker.color.b = 0.5
+                tempmarker.color.g = 0.5
+                tempmarker.color.b = 1.0
                 tempmarker.color.a = 0.5
                 tempmarker.lifetime = rospy.Duration(1.0)
                 for t in range(len(fp.x)):
