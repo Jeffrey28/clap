@@ -48,12 +48,18 @@ def calculate_drivable_area(tstates):
         #calculate from the right most lane to the left most lane, drawing drivable area boundary in counterclockwise
         lane_num = len(tstates.static_map.next_lanes)
 
-        ego_s = 0 #for next unit (road section)
+        ego_s = 0
+
+        if len(tstates.static_map.next_lanes) > 0:
+            next_lane_start_px = tstates.static_map.next_lanes[0].right_boundaries[0].boundary_point.position.x
+            next_lane_start_py = tstates.static_map.next_lanes[0].right_boundaries[0].boundary_point.position.y
+
+            ego_s = -(math.sqrt(math.pow((next_lane_start_px - ego_x), 2) + math.pow((next_lane_start_py - ego_y), 2))) #for next unit (road section)
 
         lane_sections = np.zeros((lane_num, 6))
         for i in range(len(tstates.static_map.next_lanes)):
             lane_sections[i, 0] = max(ego_s - 10, 0)
-            lane_sections[i, 1] = min(ego_s + 10, tstates.static_map.next_lanes[i].central_path_points[-1].s)
+            lane_sections[i, 1] = min(ego_s + 50, tstates.static_map.next_lanes[i].central_path_points[-1].s)
             lane_sections[i, 2] = 0 #vx in front
             lane_sections[i, 3] = 0 #vy in front
             lane_sections[i, 4] = 0 #vx behind
@@ -147,6 +153,8 @@ def calculate_drivable_area(tstates):
 
         dist_array = []
         next_key_node_list = [] #jxy: empty if still not loaded
+
+        joint_point2_index = 0
             
         if len(tstates.static_map.next_drivable_area.points) >= 3:
             for i in range(len(tstates.static_map.next_drivable_area.points)):
@@ -159,18 +167,12 @@ def calculate_drivable_area(tstates):
             joint_point2_index = dist_array.index(min(dist_array)) # the index of the point in drivable area that equals to the joint point
 
             for i in range(len(tstates.static_map.next_drivable_area.points)):
-                ii = i + joint_point2_index
-                if ii >= len(tstates.static_map.next_drivable_area.points) - 1:
-                    ii = ii - len(tstates.static_map.next_drivable_area.points)
 
-                node_point = tstates.static_map.next_drivable_area.points[ii]
+                node_point = tstates.static_map.next_drivable_area.points[i]
                 next_key_node_list.append([node_point.x, node_point.y])
 
             next_key_node_list.reverse()
             joint_point2_index = len(dist_array) - 1 - joint_point2_index
-        
-        print "dist array:"
-        print dist_array
 
         key_node_list = []
         lane = tstates.static_map.lanes[0]
@@ -184,9 +186,6 @@ def calculate_drivable_area(tstates):
         lane = tstates.static_map.lanes[-1]
         lane_section_points_generation(lane_sections[lane_num-1, 1], lane_sections[lane_num-1, 0], lane_sections[lane_num-1, 4], \
             lane_sections[lane_num-1, 5], lane_sections[lane_num-1, 2], lane_sections[lane_num-1, 3],lane.left_boundaries, key_node_list)
-
-        print "key node list:"
-        print key_node_list
 
     #step 2. interp in key nodes
     if len(key_node_list) >= 3:

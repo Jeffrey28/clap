@@ -142,7 +142,7 @@ class LocalMap(object):
         return None
 
 
-    def should_update_static_map(self, perception_range_demand = 15, lane_end_dist_thres = 2):
+    def should_update_static_map(self, perception_range_demand = 40, lane_end_dist_thres = 2):
         '''
         Determine whether map updating is needed.
         '''
@@ -327,7 +327,6 @@ class LocalMap(object):
 
             self.static_local_map.next_drivable_area.points.append(point)
             self._next_map_buffer.drivable_area.points.append(point)
-
 
     def update_lane_list(self):
         '''
