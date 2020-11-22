@@ -17,13 +17,13 @@ from zzz_common.geometry import dense_polyline2d, dense_polyline2d_withvelocity
 from zzz_planning_msgs.msg import DecisionTrajectory
 
 from zzz_planning_decision_continuous_models.common import rviz_display, convert_ndarray_to_pathmsg, convert_path_to_ndarray
-from zzz_planning_decision_continuous_models.predict import LanePredict
+from zzz_planning_decision_continuous_models.predict import LanePredict, predict
 
 # Parameter
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
 MAX_ACCEL = 10.0  # maximum acceleration [m/ss]
 MAX_CURVATURE = 500.0  # maximum curvature [1/m]
-# MAX_ROAD_WIDTH = 4.0   # maximum road width [m] # related to RL action space
+MAX_ROAD_WIDTH = 2.4   # maximum road width [m] # related to RL action space
 # LEFT_SAMPLE_BOUND = 4.0
 # RIGHT_SAMPLE_BOUND = 4.0
 D_ROAD_W = 1  # road width sampling length [m]
@@ -88,9 +88,23 @@ class Werling(object):
             self.ref_path = dense_polyline2d(ref_path_ori, 2)
             self.ref_path_tangets = np.zeros(len(self.ref_path))
 
+            print "self.ref_path:"
+            print self.ref_path
+
             Frenetrefx = self.ref_path[:,0]
             Frenetrefy = self.ref_path[:,1]
             tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
+
+    def prolong_frenet_path(self, added_path):
+        added_path_ori = convert_path_to_ndarray(added_path)
+        added_path_densed = dense_polyline2d(added_path_ori, 2)
+        added_path_list = list(added_path_densed)
+        ref_path_list = list(self.ref_path)
+        
+        for i in range(len(added_path_densed)):
+            ref_path_list.append(added_path_list[i])
+        self.ref_path = np.array(ref_path_list)
+        self.ref_path_tangets = np.zeros(len(self.ref_path))
     
     def trajectory_update(self, dynamic_map, target_speed, ego_lane_index):
         
@@ -118,7 +132,7 @@ class Werling(object):
             if self.csp is None:
                 self.build_frenet_path()
             # initialize prediction module  2020927lx::param 3rd 
-            self.obs_prediction = LanePredict(dynamic_map, OBSTACLES_CONSIDERED, 0, DT, ROBOT_RADIUS, RADIUS_SPEED_RATIO, MOVE_GAP,
+            self.obs_prediction = predict(dynamic_map, OBSTACLES_CONSIDERED, 0, DT, ROBOT_RADIUS, RADIUS_SPEED_RATIO, MOVE_GAP,
                                         get_speed(dynamic_map.ego_state))
             return True
         except:
@@ -173,8 +187,13 @@ class Werling(object):
 
 
         # Lateral slight adjustment
-        right_bound = - (max((self._lane_idx - self._ego_lane_index),0)*self._lane_width + 0.5*self._lane_width)
-        left_bound = max(self._ego_lane_index - self._lane_idx, 0)*self._lane_width + 0.5*self._lane_width
+        if self._ego_lane_index == -1:
+            right_bound = -MAX_ROAD_WIDTH
+            left_bound = MAX_ROAD_WIDTH
+        else:
+            right_bound = - (max((self._lane_idx - self._ego_lane_index),0)*self._lane_width + 0.5*self._lane_width)
+            left_bound = max(self._ego_lane_index - self._lane_idx, 0)*self._lane_width + 0.5*self._lane_width
+
         sample_width_d = 0.125*self._lane_width
 
         di_range = np.arange(right_bound, left_bound, sample_width_d)
