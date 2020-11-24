@@ -486,8 +486,8 @@ class Werling_planner(object):
         exit_point = []
         exit_point_direction = []
         
-        for i in range(len(static_map.next_drivable_area.points)):
-            node_point = static_map.next_drivable_area.points[i]
+        for i in range(len(static_map.drivable_area.points)):
+            node_point = static_map.drivable_area.points[i]
             next_junction_boundary.append([node_point.x, node_point.y])
 
         next_junction_boundary_array = np.array(next_junction_boundary)

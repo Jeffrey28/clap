@@ -60,7 +60,7 @@ class MainDecision(object):
 
             rospy.logdebug("Planning (junction): target_speed = %f km/h, current_speed: %f km/h", desired_speed*3.6, ego_speed*3.6)
 
-            self._local_trajectory_instance.remove_useless_lane(changing_lane_index)
+            self._local_trajectory_instance.remove_useless_lane(changing_lane_index) #only one remains
             self._local_trajectory_instance.prolong_frenet_lane(dynamic_map, static_map)
             
             trajectory, local_desired_speed = self._local_trajectory_instance.get_trajectory(dynamic_map, 0, desired_speed, 0)
