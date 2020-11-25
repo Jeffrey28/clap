@@ -442,7 +442,7 @@ class Werling_planner(object):
         #has removed useless lanes, only left 1 in the junction
         global_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
         exit_index = self.calc_exit_point_junction(dynamic_map, static_map)
-        next_global_path = global_path[exit_index:]
+        next_global_path = global_path[(exit_index+1):] #if +1 is outside, return []
         self.lanes[0].prolong_frenet_path(next_global_path)
 
     def calc_exit_point(self, dynamic_map, static_map):
@@ -482,38 +482,32 @@ class Werling_planner(object):
 
     def calc_exit_point_junction(self, dynamic_map, static_map):
         global_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
-        next_junction_boundary = []
-        exit_point = []
-        exit_point_direction = []
+        junction_boundary = []
         
         for i in range(len(static_map.drivable_area.points)):
             node_point = static_map.drivable_area.points[i]
-            next_junction_boundary.append([node_point.x, node_point.y])
+            junction_boundary.append([node_point.x, node_point.y])
 
-        next_junction_boundary_array = np.array(next_junction_boundary)
-        
-        inside_flag = 0 #current position is not inside the junction
+        junction_boundary_array = np.array(junction_boundary)
+
+        inside_flag = 0
+        exit_point_index = 0
+
         for i in range(len(global_path)):
             point = global_path[i]
             point_x = point.position.x
             point_y = point.position.y
-            dist_to_junction_boundary, _, _, = dist_from_point_to_closedpolyline2d(point_x, point_y, next_junction_boundary_array)
-            
+            dist_to_junction_boundary, _, _, = dist_from_point_to_closedpolyline2d(point_x, point_y, junction_boundary_array)
+
             if dist_to_junction_boundary > 0 and inside_flag != 1:
-                rospy.loginfo("enter next junction!")
-                rospy.loginfo("point position: %f, %f", point_x, point_y)
                 inside_flag = 1
-            elif dist_to_junction_boundary <= 0 and inside_flag == 1:
-                rospy.loginfo("exit next junction!")
+            if dist_to_junction_boundary <= 0 and inside_flag == 1:
+                rospy.loginfo("exit current junction!")
                 rospy.loginfo("point position: %f, %f", point_x, point_y)
-                exit_point = [point_x, point_y]
-                dx = point_x - global_path[i-1].position.x
-                dy = point_y - global_path[i-1].position.y
-                exit_point_direction = [dx, dy]
-                rospy.loginfo("point direction: %f, %f", dx, dy)
+                exit_point_index = i
                 break
 
-        return exit_point, exit_point_direction
+        return exit_point_index
 
 
     def clean_frenet_lane(self):
@@ -521,6 +515,9 @@ class Werling_planner(object):
         self.last_target_lane_index = -1
 
     def remove_useless_lane(self, changing_lane_index):
+        if len(self.lanes) == 0:
+            return
+
         temp_lane = self.lanes[int(changing_lane_index)]
         self.lanes = []
         self.lanes.append(temp_lane)

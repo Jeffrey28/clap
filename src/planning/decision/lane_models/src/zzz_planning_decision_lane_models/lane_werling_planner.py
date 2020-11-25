@@ -96,15 +96,24 @@ class Werling(object):
             tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
 
     def prolong_frenet_path(self, added_path):
+        rospy.loginfo("prolong frenet path in the junction:")
+        rospy.loginfo("added path length: %d", len(added_path))
+        rospy.loginfo("original path length: %d", len(self.ref_path))
         added_path_ori = convert_path_to_ndarray(added_path)
         added_path_densed = dense_polyline2d(added_path_ori, 2)
-        added_path_list = list(added_path_densed)
-        ref_path_list = list(self.ref_path)
-        
-        for i in range(len(added_path_densed)):
-            ref_path_list.append(added_path_list[i])
-        self.ref_path = np.array(ref_path_list)
-        self.ref_path_tangets = np.zeros(len(self.ref_path))
+        print "added_path_densed:"
+        print added_path_densed
+        print "self.ref_path:"
+        print self.ref_path
+
+        self.ref_path = np.vstack((self.ref_path, added_path_densed))
+        print "\n\n\n"
+        print "self.ref_path after prolonging:"
+        print self.ref_path
+
+        Frenetrefx = self.ref_path[:,0]
+        Frenetrefy = self.ref_path[:,1]
+        tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
     
     def trajectory_update(self, dynamic_map, target_speed, ego_lane_index):
         
