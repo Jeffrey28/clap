@@ -67,5 +67,6 @@ src/CMakeLists.txt
 src.zip
 
 1.txt
+.idea/
 
 get-pip.py
