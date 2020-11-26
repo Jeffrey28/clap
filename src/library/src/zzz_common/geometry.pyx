@@ -7,6 +7,8 @@ import numpy as np
 cimport numpy as np
 import numpy.linalg as npl
 
+import time
+
 from shapely.geometry import Polygon
 
 cpdef wrap_angle(float theta):
@@ -162,6 +164,8 @@ cpdef dist_from_point_to_closedpolyline2d(float x0, float y0, np.ndarray line, b
     :rtype: float, all returned distances are signed
     """
 
+    #t1 = time.time()
+
     if len(line) < 2:
         raise ValueError("Cannot calculate distance to an empty line or a single point!")
 
@@ -215,6 +219,10 @@ cpdef dist_from_point_to_closedpolyline2d(float x0, float y0, np.ndarray line, b
         else:
             dist_closest = dist_next
             closest_type = 1
+
+    #t2 = time.time()
+    #print "dist to closed line 2d: time consuming:" #about 4e-5 s
+    #print t2-t1
 
     # Return early if total distance is not needed
     if not return_end_distance:

@@ -184,6 +184,8 @@ class LanePredict():
     def check_collision(self, fp):
 
         if len(self.obs_paths) == 0 or len(fp.t) < 2 :
+            print "obs_paths num:"
+            print len(self.obs_paths)
             return True
             
         # two circles for a vehicle

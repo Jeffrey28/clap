@@ -109,7 +109,7 @@ class MainDecision(object):
                 return None
             
             if static_map is not None and self._load_next_junction_flag == 0:
-                if len(static_map.next_drivable_area.points) >= 3:
+                if len(static_map.next_drivable_area.points) > 3: #jxy: last is sticking point, equal to point 0, thus requiring 4 points
                     print "next junction loaded"
                     self._local_trajectory_instance.clean_frenet_lane() #TODO: modify the Werling planner by prolonging the path rather than clean it
                     self._local_trajectory_instance.build_frenet_lane(dynamic_map, static_map)

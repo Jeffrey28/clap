@@ -428,7 +428,7 @@ class Werling_planner(object):
         if static_map is not None:
             print "next drivable area point num:"
             print len(static_map.next_drivable_area.points)
-            if len(static_map.next_drivable_area.points) >= 3:
+            if len(static_map.next_drivable_area.points) > 3:
                 exit_junction_point, exit_junction_direction = self.calc_exit_point(dynamic_map, static_map)
 
         lane_num = len(dynamic_map.mmap.lanes)
@@ -456,6 +456,9 @@ class Werling_planner(object):
             next_junction_boundary.append([node_point.x, node_point.y])
 
         next_junction_boundary_array = np.array(next_junction_boundary)
+
+        print "next_junction_boundary_array:"
+        print next_junction_boundary_array
         
         inside_flag = 0 #current position is not inside the junction
         for i in range(len(global_path)):
@@ -581,6 +584,9 @@ class Werling_planner(object):
         tt1 = math.sqrt(((dx1 * dx1 + dy1 * dy1) / (m * m)) - 1)
         tt2 = math.sqrt(((dx2 * dx2 + dy2 * dy2) / (n * n)) - 1)
 
+        print "before extension:"
+        print path
+
         for i in range(11):
             rospy.loginfo("inserting points!")
             u = l - l / 10 * i
@@ -591,6 +597,9 @@ class Werling_planner(object):
             point.position.x = x
             point.position.y = y
             path.append(point)
+
+        print "after extension:"
+        print path
 
         return path
 

@@ -189,7 +189,10 @@ class Werling(object):
                                                                             di_range, Ti_range, vi_range)
         
         if fp_available:
-            rospy.logdebug("Planning (lanes): ----> Lane Werling Successful Planning (No adjustment)")
+            if self._ego_lane_index == -1:
+                rospy.logdebug("Planning (junction): ----> Lane Werling Successful Planning (No adjustment)")
+            else:
+                rospy.logdebug("Planning (lanes): ----> Lane Werling Successful Planning (No adjustment)")
             if low_resolution_speed < 10/3.6:
                 return best_free_fp, [low_resolution_speed] * len(best_free_fp.s_d)
             return best_free_fp, best_free_fp.s_d
@@ -213,7 +216,10 @@ class Werling(object):
                                                                             di_range, Ti_range, vi_range)
 
         if fp_available:
-            rospy.logdebug("Planning (lanes): ----> Lane Werling Successful Planning (Lateral slight adjustment)")
+            if self._ego_lane_index == -1:
+                rospy.logdebug("Planning (junction): ----> Lane Werling Successful Planning (Lateral slight adjustment)")
+            else:
+                rospy.logdebug("Planning (lanes): ----> Lane Werling Successful Planning (Lateral slight adjustment)")
             if low_resolution_speed < 10/3.6:
                 return best_free_fp, [low_resolution_speed] * len(best_free_fp.s_d)
             return generated_fp, generated_fp.s_d
@@ -235,7 +241,10 @@ class Werling(object):
                                                                             di_range, Ti_range, vi_range)
 
         if fp_available:
-            rospy.logdebug("Planning (lanes): ----> Lane Werling Successful Planning (speed adjustment)")
+            if self._ego_lane_index == -1:
+                rospy.logdebug("Planning (junction): ----> Lane Werling Successful Planning (speed adjustment)")
+            else:
+                rospy.logdebug("Planning (lanes): ----> Lane Werling Successful Planning (speed adjustment)")
             return generated_fp, generated_fp.s_d
             
         rospy.logdebug("Planning (lanes): ----> Lane Werling Fail to find a solution")
@@ -263,6 +272,7 @@ class Werling(object):
 
         for fp, score in sorted_fplist:
             if self.obs_prediction.check_collision(fp):
+                print "pass!!!"
                 return fp, True
 
         return best_fp, False
