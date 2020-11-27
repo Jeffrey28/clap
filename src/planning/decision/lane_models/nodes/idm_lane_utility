@@ -48,15 +48,16 @@ class DecisionNode(object):
         while not rospy.is_shutdown():
             #zwt for running 
             try:
+
                 publish_msg = self._decision_instance.update()   
             except Exception as e:
-                rospy.logerr("Planning (lanes): Exception in idm_lane_utility !!! {} \n {}".format(e.message, traceback.format_exc()))
+                rospy.logerr("Planning (unified): Exception in idm_lane_utility !!! {} \n {}".format(e.message, traceback.format_exc()))
                 pass
             
             if publish_msg:
                 self._decision_trajectory_publisher.publish(publish_msg)
                 self._rviz_decision_trajectory_publisher.publish(publish_msg.trajectory)
-                rospy.loginfo(" Planning (lanes): Publish Trajectory length = %d, desired_speed = %f km/h",
+                rospy.loginfo(" Planning (unified): Publish Trajectory length = %d, desired_speed = %f km/h",
                     len(publish_msg.trajectory.poses), publish_msg.desired_speed[-1]*3.6)
 
             self.pub_rviz()

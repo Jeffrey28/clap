@@ -17,7 +17,7 @@ from zzz_common.geometry import dense_polyline2d, dense_polyline2d_withvelocity
 from zzz_planning_msgs.msg import DecisionTrajectory
 
 from zzz_planning_decision_continuous_models.common import rviz_display, convert_ndarray_to_pathmsg, convert_path_to_ndarray
-from zzz_planning_decision_continuous_models.predict import LanePredict, predict
+from zzz_planning_decision_continuous_models.predict import predict
 
 # Parameter
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
@@ -28,8 +28,8 @@ MAX_ROAD_WIDTH = 2.4   # maximum road width [m] # related to RL action space
 # RIGHT_SAMPLE_BOUND = 4.0
 D_ROAD_W = 1  # road width sampling length [m]
 DT = 0.3  # time tick [s]
-MAXT = 8.6  # max prediction time [m]
-MINT = 8.0  # min prediction time [m]
+MAXT = 4.6  # max prediction time [m]
+MINT = 4.0  # min prediction time [m]
 D_T_S = 2 / 3.6  # target speed sampling length [m/s]
 N_S_SAMPLE = 2  # sampling number of target speed
 
@@ -141,7 +141,7 @@ class Werling(object):
             if self.csp is None:
                 self.build_frenet_path()
             # initialize prediction module  2020927lx::param 3rd 
-            self.obs_prediction = predict(dynamic_map, OBSTACLES_CONSIDERED, 0, DT, ROBOT_RADIUS, RADIUS_SPEED_RATIO, MOVE_GAP,
+            self.obs_prediction = predict(dynamic_map, OBSTACLES_CONSIDERED, MAXT, DT, ROBOT_RADIUS, RADIUS_SPEED_RATIO, MOVE_GAP,
                                         get_speed(dynamic_map.ego_state))
             return True
         except:
