@@ -108,7 +108,10 @@ class DrivingSpaceConstructor:
         # Update driving_space with tstate
         if static_map.in_junction or len(static_map.lanes) == 0:
             rospy.logdebug("In junction due to static map report junction location")
+            t1 = time.time()
             calculate_drivable_area(tstates)
+            t2 = time.time()
+            rospy.loginfo("dynamic boundary construction time consumption: %f ms", (t2 - t1) * 1000)
             #calculate_next_drivable_area(tstates)
         else:
             for lane in tstates.static_map.lanes:
@@ -118,7 +121,10 @@ class DrivingSpaceConstructor:
             self.locate_obstacle_in_lanes(tstates)
             self.locate_stop_sign_in_lanes(tstates)
             self.locate_speed_limit_in_lanes(tstates)
+            t1 = time.time()
             calculate_drivable_area(tstates)
+            t2 = time.time()
+            rospy.loginfo("dynamic boundary construction time consumption: %f ms", (t2 - t1) * 1000)
             #calculate_next_drivable_area(tstates)
         
         self._driving_space.header.frame_id = "map"

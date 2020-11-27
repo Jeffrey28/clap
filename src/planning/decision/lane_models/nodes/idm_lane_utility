@@ -3,6 +3,8 @@
 import rospy
 import traceback
 
+import time
+
 from zzz_common.params import parse_private_args
 from zzz_cognition_msgs.msg import MapState
 from zzz_navigation_msgs.msg import Map
@@ -48,8 +50,10 @@ class DecisionNode(object):
         while not rospy.is_shutdown():
             #zwt for running 
             try:
-
+                t1 = time.time()
                 publish_msg = self._decision_instance.update()   
+                t2 = time.time()
+                rospy.loginfo("planning time consumption: %f ms", (t2 - t1) * 1000)
             except Exception as e:
                 rospy.logerr("Planning (unified): Exception in idm_lane_utility !!! {} \n {}".format(e.message, traceback.format_exc()))
                 pass

@@ -88,9 +88,6 @@ class Werling(object):
             self.ref_path = dense_polyline2d(ref_path_ori, 2)
             self.ref_path_tangets = np.zeros(len(self.ref_path))
 
-            print "self.ref_path:"
-            print self.ref_path
-
             Frenetrefx = self.ref_path[:,0]
             Frenetrefy = self.ref_path[:,1]
             tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
@@ -101,15 +98,8 @@ class Werling(object):
         rospy.loginfo("original path length: %d", len(self.ref_path))
         added_path_ori = convert_path_to_ndarray(added_path)
         added_path_densed = dense_polyline2d(added_path_ori, 2)
-        print "added_path_densed:"
-        print added_path_densed
-        print "self.ref_path:"
-        print self.ref_path
 
         self.ref_path = np.vstack((self.ref_path, added_path_densed))
-        print "\n\n\n"
-        print "self.ref_path after prolonging:"
-        print self.ref_path
 
         Frenetrefx = self.ref_path[:,0]
         Frenetrefy = self.ref_path[:,1]

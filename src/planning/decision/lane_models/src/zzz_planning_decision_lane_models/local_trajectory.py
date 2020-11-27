@@ -584,11 +584,7 @@ class Werling_planner(object):
         tt1 = math.sqrt(((dx1 * dx1 + dy1 * dy1) / (m * m)) - 1)
         tt2 = math.sqrt(((dx2 * dx2 + dy2 * dy2) / (n * n)) - 1)
 
-        print "before extension:"
-        print path
-
         for i in range(11):
-            rospy.loginfo("inserting points!")
             u = l - l / 10 * i
             v = -(u - l) * u * ((tt1 - tt2) / (l * l) * u + tt2 / l)
             x = ((x1 - x2) * u + (y2 - y1) * v) / l + x2
@@ -597,9 +593,6 @@ class Werling_planner(object):
             point.position.x = x
             point.position.y = y
             path.append(point)
-
-        print "after extension:"
-        print path
 
         return path
 

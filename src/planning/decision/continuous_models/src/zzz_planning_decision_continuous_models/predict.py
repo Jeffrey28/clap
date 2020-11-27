@@ -36,7 +36,7 @@ class predict():
             self.obs_paths = self.prediction_obstacle(self.obs, self.maxt, self.dt)
 
         except:
-            rospy.logerror("Planning (continuous): Fail to initialize prediction")
+            rospy.logerr("Planning (continuous): Fail to initialize prediction")
             self.obs_paths = []
 
     def check_collision(self, fp):
@@ -74,7 +74,7 @@ class predict():
                         return False
         except:
             #if try did not work, it is not assured whether the path has collision or not, should return false
-            rospy.logerror("check collision fail")
+            rospy.logerr("check collision fail")
             return False
 
         # self.rviz_collision_checking_circle = self.rivz_element.draw_circles(fp_front, fp_back, self.check_radius)

@@ -12,7 +12,7 @@ from zzz_navigation_msgs.utils import get_lane_array, default_msg as navigation_
 from zzz_cognition_msgs.msg import MapState, LaneState, RoadObstacle
 from zzz_cognition_msgs.utils import convert_tracking_box, default_msg as cognition_default
 from zzz_perception_msgs.msg import TrackingBoxArray, DetectionBoxArray, ObjectSignals, DimensionWithCovariance
-from zzz_common.geometry import dist_from_point_to_polyline2d, wrap_angle
+from zzz_common.geometry import dist_from_point_to_polyline2d, wrap_angle, dist_from_point_to_closedpolyline2d
 from zzz_common.kinematics import get_frenet_state
 from zzz_cognition_msgs.msg import DrivingSpace, DynamicBoundary, DynamicBoundaryPoint
 from visualization_msgs.msg import Marker, MarkerArray
@@ -187,6 +187,8 @@ def calculate_drivable_area(tstates):
         lane_section_points_generation(lane_sections[lane_num-1, 1], lane_sections[lane_num-1, 0], lane_sections[lane_num-1, 4], \
             lane_sections[lane_num-1, 5], lane_sections[lane_num-1, 2], lane_sections[lane_num-1, 3],lane.left_boundaries, key_node_list)
 
+        key_node_list.reverse()
+        
     #step 2. interp in key nodes
     if len(key_node_list) >= 3:
         for i in range(len(key_node_list)):
@@ -225,8 +227,14 @@ def calculate_drivable_area(tstates):
         return
 
     #step 3. consider the vehicles in the junction
+
+    t1 = time.time()
     
     check_list = np.zeros(len(dist_list))
+    key_node_list_array = np.array(key_node_list)
+
+    key_node_list_xy_array = key_node_list_array[:,:2]
+    key_node_list_xy_array = np.vstack((key_node_list_xy_array, key_node_list_xy_array[0])) #close the figure
 
     if len(tstates.surrounding_object_list) != 0:
         for i in range(len(tstates.surrounding_object_list)):
@@ -235,6 +243,10 @@ def calculate_drivable_area(tstates):
                 + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
             
             if dist_to_ego < 35:
+                dist_to_static_boundary, _, _, = dist_from_point_to_closedpolyline2d(obs.state.pose.pose.position.x, \
+                    obs.state.pose.pose.position.y, key_node_list_xy_array)
+                if dist_to_static_boundary <= 0:
+                    continue
                 #TODO: find a more robust method
                 obs_x = obs.state.pose.pose.position.x
                 obs_y = obs.state.pose.pose.position.y
@@ -305,9 +317,6 @@ def calculate_drivable_area(tstates):
                                 corner1 = big_corner_id
                                 corner2 = middle_corner_id
                                 id_extra_flag = 0.2
-
-                        #boundary direction
-                        direction = math.atan2(corner_list_y[corner2] - corner_list_y[corner1], corner_list_x[corner2] - corner_list_x[corner1])
                         
                         cross_position_x = corner_list_x[corner2] + (corner_list_x[corner1] - corner_list_x[corner2]) * (angle_list[j] - corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
                         cross_position_y = corner_list_y[corner2] + (corner_list_y[corner1] - corner_list_y[corner2]) * (angle_list[j] - corner_list_angle[corner2]) / (corner_list_angle[corner1] - corner_list_angle[corner2])
@@ -466,6 +475,9 @@ def calculate_drivable_area(tstates):
     if len(tstates.drivable_area) > 0:
         tstates.drivable_area.append(tstates.drivable_area[0])
 
+    t2 = time.time()
+    rospy.loginfo("object consideration time: %f ms", (t2 - t1) * 1000)
+
     #rospy.loginfo("drivable_area constructed with length %d", len(tstates.drivable_area))
 
 def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy, lane_boundaries, outpointlist):
@@ -512,10 +524,10 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (smalls - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (smalls - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy, vx_s, vy_s, 0, 0, 0, 2]
+                point = [pointx, pointy]
                 pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s > smalls and lane_boundaries[j].boundary_point.s < bigs:
-            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0, 0, 0, 0, 1]
+            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y]
             pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s >= bigs:
             if j == 0:
@@ -539,7 +551,7 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy, vx_s, vy_s, 0, 0, 0, flag]
+                point = [pointx, pointy]
                 pointlist.append(point)
 
     if starts <= ends:
@@ -596,10 +608,10 @@ def next_lane_section_points_generation_united(starts, ends, startvx, startvy, e
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (smalls - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (smalls - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy, vx_s, vy_s, 0, flag]
+                point = [pointx, pointy]
                 pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s > smalls and lane_boundaries[j].boundary_point.s < bigs:
-            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0, 0, 1]
+            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y]
             pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s >= bigs:
             if j == 0:
