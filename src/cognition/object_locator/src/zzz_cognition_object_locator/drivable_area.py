@@ -41,6 +41,8 @@ def calculate_drivable_area(tstates):
     omega_list = []
     flag_list = []
 
+    skip_list = [] #lane following vehicles, only when ego vehicle is in lanes
+
     if tstates.static_map.in_junction:
 
         # jxy0710: try to merge the next static boundary into the junction boundary to make one closed boundary, then add dynamic objects
@@ -146,6 +148,29 @@ def calculate_drivable_area(tstates):
             lane_open_flag.append(1) #default is open
             #TODO: projection to the vertial direction
 
+        for i in range(len(tstates.obstacles)):
+            obstacle = tstates.obstacles[i]
+            if obstacle.lane_index == -1:
+                continue
+            else:
+                #the obstacle in on the same road as the ego vehicle
+                lane_index_rounded = int(round(obstacle.lane_index))
+                #TODO: consider those on the lane boundary
+                if obstacle.lane_dist_left_t == 0 or obstacle.lane_dist_right_t == 0: #not lane following
+                    continue
+                if obstacle.lane_dist_s > ego_s and obstacle.lane_dist_s < lane_sections[lane_index_rounded, 1]:
+                    if len(tstates.static_map.next_drivable_area.points) >= 3:
+                        continue
+                    lane_sections[lane_index_rounded, 1] = obstacle.lane_dist_s - obstacle.dimension.length_x / 2.0
+                    lane_sections[lane_index_rounded, 4] = obstacle.state.twist.twist.linear.x
+                    lane_sections[lane_index_rounded, 5] = obstacle.state.twist.twist.linear.y
+                    skip_list.append(i)
+                elif obstacle.lane_dist_s <= ego_s and obstacle.lane_dist_s > lane_sections[lane_index_rounded, 0]:
+                    lane_sections[lane_index_rounded, 0] = obstacle.lane_dist_s + obstacle.dimension.length_x / 2.0
+                    lane_sections[lane_index_rounded, 2] = obstacle.state.twist.twist.linear.x
+                    lane_sections[lane_index_rounded, 3] = obstacle.state.twist.twist.linear.y
+                    skip_list.append(i)
+
         #next junction: paste with next junction, at joint point
         joint_point = tstates.static_map.lanes[0].right_boundaries[-1]
         joint_point_x = joint_point.boundary_point.position.x
@@ -175,17 +200,60 @@ def calculate_drivable_area(tstates):
             joint_point2_index = len(dist_array) - 1 - joint_point2_index
 
         key_node_list = []
-        lane = tstates.static_map.lanes[0]
-        lane_section_points_generation(lane_sections[0, 0], lane_sections[0, 1], lane_sections[0, 2], \
-            lane_sections[0, 3], lane_sections[0, 4], lane_sections[0, 5],lane.right_boundaries, key_node_list)
-        for i in range(len(next_key_node_list)):
-            ii = i + joint_point2_index
-            if ii >= len(next_key_node_list):
-                ii = ii - len(next_key_node_list)
-            key_node_list.append(next_key_node_list[ii])
-        lane = tstates.static_map.lanes[-1]
-        lane_section_points_generation(lane_sections[lane_num-1, 1], lane_sections[lane_num-1, 0], lane_sections[lane_num-1, 4], \
-            lane_sections[lane_num-1, 5], lane_sections[lane_num-1, 2], lane_sections[lane_num-1, 3],lane.left_boundaries, key_node_list)
+        if len(tstates.static_map.next_drivable_area.points) >= 3:
+            lane = tstates.static_map.lanes[0]
+            lane_section_points_generation(lane_sections[0, 0], lane_sections[0, 1], lane_sections[0, 2], \
+                lane_sections[0, 3], lane_sections[0, 4], lane_sections[0, 5],lane.right_boundaries, key_node_list)
+            for i in range(len(next_key_node_list)):
+                ii = i + joint_point2_index
+                if ii >= len(next_key_node_list):
+                    ii = ii - len(next_key_node_list)
+                key_node_list.append(next_key_node_list[ii])
+            lane = tstates.static_map.lanes[-1]
+            lane_section_points_generation(lane_sections[lane_num-1, 1], lane_sections[lane_num-1, 0], lane_sections[lane_num-1, 4], \
+                lane_sections[lane_num-1, 5], lane_sections[lane_num-1, 2], lane_sections[lane_num-1, 3],lane.left_boundaries, key_node_list)
+            for j in range(len(tstates.static_map.lanes)):
+                i = len(tstates.static_map.lanes) - 1 - j
+                lane = tstates.static_map.lanes[i]                
+                if i != len(tstates.static_map.lanes) - 1:
+                    lane_section_points_generation(lane_sections[i+1, 0], lane_sections[i, 0], lane_sections[i+1, 2], \
+                        lane_sections[i+1, 3], lane_sections[i, 2], lane_sections[i, 3], lane.left_boundaries, key_node_list)
+                    if i != 0:
+                        lane_section_points_generation(lane_sections[i, 0], lane_sections[i-1, 0], lane_sections[i, 2], \
+                        lane_sections[i, 3], lane_sections[i-1, 2], lane_sections[i-1, 3], lane.right_boundaries, key_node_list)
+            
+
+        else:
+            for i in range(len(tstates.static_map.lanes)):
+                lane = tstates.static_map.lanes[i]
+                if i == 0:
+                    lane_section_points_generation(lane_sections[i, 0], lane_sections[i, 1], lane_sections[i, 2], \
+                        lane_sections[i, 3], lane_sections[i, 4], lane_sections[i, 5],lane.right_boundaries, key_node_list)
+                
+                if i != 0:
+                    lane_section_points_generation(lane_sections[i-1, 1], lane_sections[i, 1], lane_sections[i-1, 4], \
+                        lane_sections[i-1, 5], lane_sections[i, 4], lane_sections[i, 5], lane.right_boundaries, key_node_list)
+                    if i != len(tstates.static_map.lanes) - 1:
+                        lane_section_points_generation(lane_sections[i, 1], lane_sections[i+1, 1], lane_sections[i, 4], \
+                        lane_sections[i, 5], lane_sections[i+1, 4], lane_sections[i+1, 5], lane.left_boundaries, key_node_list)
+                    else:
+                        lane_section_points_generation(lane_sections[i, 1], lane_sections[i, 0], lane_sections[i, 4], \
+                        lane_sections[i, 5], lane_sections[i, 2], lane_sections[i, 3], lane.left_boundaries, key_node_list)
+
+                if len(tstates.static_map.lanes) == 1:
+                    lane_section_points_generation(lane_sections[i, 1], lane_sections[i, 0], lane_sections[i, 4], \
+                        lane_sections[i, 5], lane_sections[i, 2], lane_sections[i, 3], lane.left_boundaries, key_node_list)
+
+            for j in range(len(tstates.static_map.lanes)):
+                i = len(tstates.static_map.lanes) - 1 - j
+                lane = tstates.static_map.lanes[i]                
+                if i != len(tstates.static_map.lanes) - 1:
+                    lane_section_points_generation(lane_sections[i+1, 0], lane_sections[i, 0], lane_sections[i+1, 2], \
+                        lane_sections[i+1, 3], lane_sections[i, 2], lane_sections[i, 3], lane.left_boundaries, key_node_list)
+                    if i != 0:
+                        lane_section_points_generation(lane_sections[i, 0], lane_sections[i-1, 0], lane_sections[i, 2], \
+                        lane_sections[i, 3], lane_sections[i-1, 2], lane_sections[i-1, 3], lane.right_boundaries, key_node_list)
+
 
         key_node_list.reverse()
         
@@ -228,6 +296,10 @@ def calculate_drivable_area(tstates):
 
     #step 3. consider the vehicles in the junction
 
+    #jxy202011: if in lanes, first consider the lane-keeping vehicles.
+    #if next junction is loaded, those ahead are all considered as free vehicles. Only those behind are considered specially.
+    #if next junction is not loaded, all of them should be be considered specially.
+
     t1 = time.time()
     
     check_list = np.zeros(len(dist_list))
@@ -241,6 +313,9 @@ def calculate_drivable_area(tstates):
             obs = tstates.surrounding_object_list[i]
             dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
                 + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
+
+            if i in skip_list:
+                continue
             
             if dist_to_ego < 35:
                 dist_to_static_boundary, _, _, = dist_from_point_to_closedpolyline2d(obs.state.pose.pose.position.x, \

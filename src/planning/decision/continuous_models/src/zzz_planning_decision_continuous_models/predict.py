@@ -47,35 +47,26 @@ class predict():
         # two circles for a vehicle
         fp_front = copy.deepcopy(fp)
         fp_back = copy.deepcopy(fp)
-        
-        try:
-            # for t in range(len(fp.yaw)):
-            #     fp_front.x[t] = fp.x[t] + math.cos(fp.yaw[t]) * self.move_gap
-            #     fp_front.y[t] = fp.y[t] + math.sin(fp.yaw[t]) * self.move_gap
-            #     fp_back.x[t] = fp.x[t] - math.cos(fp.yaw[t]) * self.move_gap
-            #     fp_back.y[t] = fp.y[t] - math.sin(fp.yaw[t]) * self.move_gap
 
-            fp_front.x = (np.array(fp.x)+np.cos(np.array(fp.yaw))*self.move_gap).tolist()
-            fp_front.y = (np.array(fp.y)+np.sin(np.array(fp.yaw))*self.move_gap).tolist()
-            fp_back.x = (np.array(fp.x)-np.cos(np.array(fp.yaw))*self.move_gap).tolist()
-            fp_back.y = (np.array(fp.y)-np.sin(np.array(fp.yaw))*self.move_gap).tolist()
+        fp_front.x = (np.array(fp.x)+np.cos(np.array(fp.yaw))*self.move_gap).tolist()
+        fp_front.y = (np.array(fp.y)+np.sin(np.array(fp.yaw))*self.move_gap).tolist()
+        fp_back.x = (np.array(fp.x)-np.cos(np.array(fp.yaw))*self.move_gap).tolist()
+        fp_back.y = (np.array(fp.y)-np.sin(np.array(fp.yaw))*self.move_gap).tolist()
 
-            for obsp in self.obs_paths:
-                len_predict_t = min(len(fp.t), len(obsp.t))
-                predict_step = 2
-                start_predict = 2
+        for obsp in self.obs_paths:
+            len_predict_t = min(len(fp.t), len(obsp.t))
+            predict_step = 2
+            start_predict = 2
 
-                for t in range(start_predict, len_predict_t, predict_step):
-                    d = (obsp.x[t] - fp_front.x[t])**2 + (obsp.y[t] - fp_front.y[t])**2
-                    if d <= self.check_radius**2: 
-                        return False
-                    d = (obsp.x[t] - fp_back.x[t])**2 + (obsp.y[t] - fp_back.y[t])**2
-                    if d <= self.check_radius**2: 
-                        return False
-        except:
-            #if try did not work, it is not assured whether the path has collision or not, should return false
-            rospy.logerr("check collision fail")
-            return False
+            for t in range(start_predict, len_predict_t, predict_step):
+                if t >= len(fp_front.x):
+                    return True #current fp is short, check to the possible longest time
+                d = (obsp.x[t] - fp_front.x[t])**2 + (obsp.y[t] - fp_front.y[t])**2
+                if d <= self.check_radius**2: 
+                    return False
+                d = (obsp.x[t] - fp_back.x[t])**2 + (obsp.y[t] - fp_back.y[t])**2
+                if d <= self.check_radius**2: 
+                    return False
 
         # self.rviz_collision_checking_circle = self.rivz_element.draw_circles(fp_front, fp_back, self.check_radius)
         return True
