@@ -211,7 +211,7 @@ class Werling(object):
             else:
                 rospy.logdebug("Planning (lanes): ----> Lane Werling Successful Planning (Lateral slight adjustment)")
             if low_resolution_speed < 10/3.6:
-                return best_free_fp, [low_resolution_speed] * len(best_free_fp.s_d)
+                return generated_fp, [low_resolution_speed] * len(generated_fp.s_d)
             return generated_fp, generated_fp.s_d
 
 
