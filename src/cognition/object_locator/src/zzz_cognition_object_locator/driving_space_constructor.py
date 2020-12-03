@@ -19,10 +19,13 @@ from zzz_cognition_msgs.msg import DrivingSpace, DynamicBoundary, DynamicBoundar
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
 from zzz_driver_msgs.utils import get_speed, get_yaw
-from drivable_area import calculate_drivable_area
+from drivable_area import calculate_drivable_areas, predict_obstacles
 
 #jxy 20191125: first output the driving space, then use the driving space for cognition. 
 #For this demo version, it will be a unified module, in future versions, this will be split into 2 modules.
+
+DT = 0.3  # time tick [s]
+STEPS = 10 # predict time steps
 
 class DrivingSpaceConstructor:
     def __init__(self, lane_dist_thres=5):
@@ -84,60 +87,71 @@ class DrivingSpaceConstructor:
 
         tstates = edict()
 
+        t1 = time.time()
+
         # Skip if not ready
         if not self._ego_vehicle_state_buffer:
             return False
 
         with self._ego_vehicle_state_lock:
-            tstates.ego_vehicle_state = copy.deepcopy(self.     _ego_vehicle_state_buffer) 
+            tstates.ego_vehicle_state = self._ego_vehicle_state_buffer
 
         # Update buffer information
-        tstates.surrounding_object_list = copy.deepcopy(self._surrounding_object_list_buffer or [])
+        tstates.surrounding_object_list = self._surrounding_object_list_buffer or [] #jxy20201202: remove deepcopy to accelerate
 
-        tstates.static_map = copy.deepcopy(self._static_map_buffer or navigation_default(Map)) 
+        tstates.static_map = self._static_map_buffer or navigation_default(Map)
         static_map = tstates.static_map # for easier access
         tstates.static_map_lane_path_array = get_lane_array(tstates.static_map.lanes)
         tstates.static_map_lane_tangets = [[point.tangent for point in lane.central_path_points] for lane in tstates.static_map.lanes]
-        tstates.obstacles = [] #about to add in the following steps
         tstates.ego_lane_index = -1 #about to modify in the following steps
         tstates.ego_s = -1
-        tstates.drivable_area = []
         tstates.next_drivable_area = []
+        tstates.surrounding_object_list_timelist = []
+        tstates.drivable_area_timelist = []
         self._driving_space = DrivingSpace()
+
+        t2 = time.time()
+
+        #jxy20201202: move prediction here
+        predict_obstacles(tstates, STEPS)
+        print "predicted obstacles, steps: "
+        print len(tstates.surrounding_object_list_timelist)
+
+        t3 = time.time()
 
         # Update driving_space with tstate
         if static_map.in_junction or len(static_map.lanes) == 0:
             rospy.logdebug("In junction due to static map report junction location")
-            t1 = time.time()
-            calculate_drivable_area(tstates)
-            t2 = time.time()
-            rospy.loginfo("dynamic boundary construction time consumption: %f ms", (t2 - t1) * 1000)
-            #calculate_next_drivable_area(tstates)
         else:
             for lane in tstates.static_map.lanes:
                 self._driving_space.lanes.append(lane)
             #jxy: why is target lane in static map?
             self.locate_ego_vehicle_in_lanes(tstates)
-            self.locate_obstacle_in_lanes(tstates)
+            for i in range(STEPS):
+                self.locate_obstacle_in_lanes(tstates, i)
             self.locate_stop_sign_in_lanes(tstates)
             self.locate_speed_limit_in_lanes(tstates)
-            t1 = time.time()
-            calculate_drivable_area(tstates)
-            t2 = time.time()
-            rospy.loginfo("dynamic boundary construction time consumption: %f ms", (t2 - t1) * 1000)
-            #calculate_next_drivable_area(tstates)
+
+        t4 = time.time()
         
+        for i in range(STEPS):
+            calculate_drivable_areas(tstates, i)
+
+        t5 = time.time()
+        
+        #jxy1202: will change output at final step
         self._driving_space.header.frame_id = "map"
         self._driving_space.header.stamp = rospy.Time.now()
         self._driving_space.ego_state = tstates.ego_vehicle_state.state
-        self._driving_space.obstacles = tstates.obstacles
+        self._driving_space.obstacles = tstates.surrounding_object_list
         rospy.logdebug("len(self._static_map.lanes): %d", len(tstates.static_map.lanes))
 
+        #jxy1202: will change output at final step
         self.dynamic_boundary = DynamicBoundary()
         self.dynamic_boundary.header.frame_id = "map"
         self.dynamic_boundary.header.stamp = rospy.Time.now()
-        for i in range(len(tstates.drivable_area)):
-            drivable_area_point = tstates.drivable_area[i]
+        for i in range(len(tstates.drivable_area_timelist[0])):
+            drivable_area_point = tstates.drivable_area_timelist[0][i]
             boundary_point = DynamicBoundaryPoint()
             boundary_point.x = drivable_area_point[0]
             boundary_point.y = drivable_area_point[1]
@@ -149,580 +163,15 @@ class DrivingSpaceConstructor:
             boundary_point.flag = drivable_area_point[7]
             self.dynamic_boundary.boundary.append(boundary_point)
 
-        #TODO: move to drivable area to only keep the lane sections inside the drivable area
+        self.visualization(tstates)
 
-        #jxy0510: extend the dynamic boundary by lanes
-        if not (tstates.static_map.in_junction):
-            for i in range(len(tstates.static_map.lanes)):
-                lane = tstates.static_map.lanes[i]
-                if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
-                    #the left most lane boundary line cannot be broken, or else it won't be the left most lane
-                    if lane.right_boundaries[0].boundary_type == 1:
-                        for lb in lane.right_boundaries:
-                            lane_point = DynamicBoundaryPoint()
-                            lane_point.x = lb.boundary_point.position.x
-                            lane_point.y = lb.boundary_point.position.y
-                            lane_point.vx = 0
-                            lane_point.vy = 0
-                            lane_point.base_x = 0
-                            lane_point.base_y = 0
-                            lane_point.omega = 0
-                            lane_point.flag = 3 + 0.1*i #mark the lane id in flag
-                            self.dynamic_boundary.boundary.append(lane_point)
-
-        #jxy0615: further extend by the next boundary and the next lanes points
-        for i in range(len(tstates.next_drivable_area)):
-            drivable_area_point = tstates.next_drivable_area[i]
-            boundary_point = DynamicBoundaryPoint()
-            boundary_point.x = drivable_area_point[0]
-            boundary_point.y = drivable_area_point[1]
-            boundary_point.vx = drivable_area_point[2]
-            boundary_point.vy = drivable_area_point[3]
-            boundary_point.base_x = drivable_area_point[4]
-            boundary_point.base_y = drivable_area_point[5]
-            boundary_point.omega = drivable_area_point[6]
-            boundary_point.flag = drivable_area_point[7] + 10 #add 10 to mark that it is the next drivable area
-            self.dynamic_boundary.boundary.append(boundary_point)
-
-        if (tstates.static_map.in_junction):
-            for i in range(len(tstates.static_map.next_lanes)):
-                lane = tstates.static_map.next_lanes[i]
-                if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
-                    #the left most lane boundary line cannot be broken, or else it won't be the left most lane
-                    if lane.right_boundaries[0].boundary_type == 1:
-                        for lb in lane.right_boundaries:
-                            lane_point = DynamicBoundaryPoint()
-                            lane_point.x = lb.boundary_point.position.x
-                            lane_point.y = lb.boundary_point.position.y
-                            lane_point.vx = 0
-                            lane_point.vy = 0
-                            lane_point.base_x = 0
-                            lane_point.base_y = 0
-                            lane_point.omega = 0
-                            lane_point.flag = 3 + 0.1*i + 10 #mark the lane id in flag
-                            self.dynamic_boundary.boundary.append(lane_point)
-
-        #visualization
-        #1. lanes
-        self._lanes_markerarray = MarkerArray()
-
-        count = 0
-        if not (tstates.static_map.in_junction):
-            biggest_id = 0 #TODO: better way to find the smallest id
-            
-            for lane in tstates.static_map.lanes:
-                if lane.index > biggest_id:
-                    biggest_id = lane.index
-                tempmarker = Marker() #jxy: must be put inside since it is python
-                tempmarker.header.frame_id = "map"
-                tempmarker.header.stamp = rospy.Time.now()
-                tempmarker.ns = "zzz/cognition"
-                tempmarker.id = count
-                tempmarker.type = Marker.LINE_STRIP
-                tempmarker.action = Marker.ADD
-                tempmarker.scale.x = 0.12
-                tempmarker.color.r = 1.0
-                tempmarker.color.g = 0.0
-                tempmarker.color.b = 0.0
-                tempmarker.color.a = 0.5
-                tempmarker.lifetime = rospy.Duration(0.5)
-
-                for lanepoint in lane.central_path_points:
-                    p = Point()
-                    p.x = lanepoint.position.x
-                    p.y = lanepoint.position.y
-                    p.z = lanepoint.position.z
-                    tempmarker.points.append(p)
-                self._lanes_markerarray.markers.append(tempmarker)
-                count = count + 1
-
-        #2. lane boundary line
-        self._lanes_boundary_markerarray = MarkerArray()
-
-        count = 0
-        if not (tstates.static_map.in_junction):
-            #does not draw lane when ego vehicle is in the junction
-            
-            for lane in tstates.static_map.lanes:
-                if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
-                    tempmarker = Marker() #jxy: must be put inside since it is python
-                    tempmarker.header.frame_id = "map"
-                    tempmarker.header.stamp = rospy.Time.now()
-                    tempmarker.ns = "zzz/cognition"
-                    tempmarker.id = count
-
-                    #each lane has the right boundary, only the lane with the smallest id has the left boundary
-                    tempmarker.type = Marker.LINE_STRIP
-                    tempmarker.action = Marker.ADD
-                    tempmarker.scale.x = 0.15
-                    if lane.right_boundaries[0].boundary_type == 1: #broken lane is set gray
-                        tempmarker.color.r = 0.6
-                        tempmarker.color.g = 0.6
-                        tempmarker.color.b = 0.5
-                        tempmarker.color.a = 0.5
-                    else:
-                        tempmarker.color.r = 1.0
-                        tempmarker.color.g = 1.0
-                        tempmarker.color.b = 1.0
-                        tempmarker.color.a = 0.5
-                    tempmarker.lifetime = rospy.Duration(0.5)
-
-                    for lb in lane.right_boundaries:
-                        p = Point()
-                        p.x = lb.boundary_point.position.x
-                        p.y = lb.boundary_point.position.y
-                        p.z = lb.boundary_point.position.z
-                        tempmarker.points.append(p)
-                    self._lanes_boundary_markerarray.markers.append(tempmarker)
-                    count = count + 1
-
-                    #biggest id: draw left lane
-                    if lane.index == biggest_id:
-                        tempmarker = Marker() #jxy: must be put inside since it is python
-                        tempmarker.header.frame_id = "map"
-                        tempmarker.header.stamp = rospy.Time.now()
-                        tempmarker.ns = "zzz/cognition"
-                        tempmarker.id = count
-
-                        #each lane has the right boundary, only the lane with the biggest id has the left boundary
-                        tempmarker.type = Marker.LINE_STRIP
-                        tempmarker.action = Marker.ADD
-                        tempmarker.scale.x = 0.3
-                        if lane.left_boundaries[0].boundary_type == 1: #broken lane is set gray
-                            tempmarker.color.r = 0.6
-                            tempmarker.color.g = 0.6
-                            tempmarker.color.b = 0.6
-                            tempmarker.color.a = 0.5
-                        else:
-                            tempmarker.color.r = 1.0
-                            tempmarker.color.g = 1.0
-                            tempmarker.color.b = 1.0
-                            tempmarker.color.a = 0.5
-                        tempmarker.lifetime = rospy.Duration(0.5)
-
-                        for lb in lane.left_boundaries:
-                            p = Point()
-                            p.x = lb.boundary_point.position.x
-                            p.y = lb.boundary_point.position.y
-                            p.z = lb.boundary_point.position.z
-                            tempmarker.points.append(p)
-                        self._lanes_boundary_markerarray.markers.append(tempmarker)
-                        count = count + 1
-
-        #3. obstacle
-        self._obstacles_markerarray = MarkerArray()
-        
-        count = 0
-        if tstates.surrounding_object_list is not None:
-            for obs in tstates.surrounding_object_list:
-                dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
-                    + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
-                
-                if dist_to_ego < 50:
-                    tempmarker = Marker() #jxy: must be put inside since it is python
-                    tempmarker.header.frame_id = "map"
-                    tempmarker.header.stamp = rospy.Time.now()
-                    tempmarker.ns = "zzz/cognition"
-                    tempmarker.id = count
-                    tempmarker.type = Marker.CUBE
-                    tempmarker.action = Marker.ADD
-                    tempmarker.pose = obs.state.pose.pose
-                    tempmarker.scale.x = obs.dimension.length_x
-                    tempmarker.scale.y = obs.dimension.length_y
-                    tempmarker.scale.z = obs.dimension.length_z
-                    if obs.lane_index == -1:
-                        tempmarker.color.r = 0.5
-                        tempmarker.color.g = 0.5
-                        tempmarker.color.b = 0.5
-                    elif obs.lane_dist_left_t == 0 or obs.lane_dist_right_t == 0:
-                        # those who is on the lane boundary, warn by yellow
-                        tempmarker.color.r = 1.0
-                        tempmarker.color.g = 1.0
-                        tempmarker.color.b = 0.0
-                    else:
-                        tempmarker.color.r = 1.0
-                        tempmarker.color.g = 0.0
-                        tempmarker.color.b = 1.0
-                    if tstates.static_map.in_junction:
-                        tempmarker.color.r = 1.0
-                        tempmarker.color.g = 0.0
-                        tempmarker.color.b = 1.0
-                    tempmarker.color.a = 0.5
-                    tempmarker.lifetime = rospy.Duration(0.5)
-
-                    self._obstacles_markerarray.markers.append(tempmarker)
-                    count = count + 1
-            
-            for obs in tstates.surrounding_object_list:
-                dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
-                    + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
-                
-                if dist_to_ego < 50:
-                    tempmarker = Marker() #jxy: must be put inside since it is python
-                    tempmarker.header.frame_id = "map"
-                    tempmarker.header.stamp = rospy.Time.now()
-                    tempmarker.ns = "zzz/cognition"
-                    tempmarker.id = count
-                    tempmarker.type = Marker.ARROW
-                    tempmarker.action = Marker.ADD
-                    tempmarker.scale.x = 0.4
-                    tempmarker.scale.y = 0.7
-                    tempmarker.scale.z = 0.75
-                    tempmarker.color.r = 1.0
-                    tempmarker.color.g = 1.0
-                    tempmarker.color.b = 0.0
-                    tempmarker.color.a = 0.5
-                    tempmarker.lifetime = rospy.Duration(0.5)
-
-                    #quaternion transform for obs velocity in carla 0.9.8
-
-                    x = obs.state.pose.pose.orientation.x
-                    y = obs.state.pose.pose.orientation.y
-                    z = obs.state.pose.pose.orientation.z
-                    w = obs.state.pose.pose.orientation.w
-
-                    #rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
-                    #rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
-
-                    vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
-                    #vel_world = np.matmul(rotation_mat, vel_obs)
-                    #vel_world = vel_obs
-                    #check if it should be reversed
-                    obs_vx_world = vel_obs[0]
-                    obs_vy_world = vel_obs[1]
-                    obs_vz_world = vel_obs[2]
-
-                    startpoint = Point()
-                    endpoint = Point()
-                    startpoint.x = obs.state.pose.pose.position.x
-                    startpoint.y = obs.state.pose.pose.position.y
-                    startpoint.z = obs.state.pose.pose.position.z
-                    endpoint.x = obs.state.pose.pose.position.x + obs_vx_world
-                    endpoint.y = obs.state.pose.pose.position.y + obs_vy_world
-                    endpoint.z = obs.state.pose.pose.position.z + obs_vz_world
-                    tempmarker.points.append(startpoint)
-                    tempmarker.points.append(endpoint)
-
-                    self._obstacles_markerarray.markers.append(tempmarker)
-                    count = count + 1
-
-        #4. the labels of objects
-        self._obstacles_label_markerarray = MarkerArray()
-
-        count = 0
-        if tstates.surrounding_object_list is not None:                    
-            for obs in tstates.surrounding_object_list:
-                dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
-                    + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
-                
-                if dist_to_ego < 50:
-                    tempmarker = Marker() #jxy: must be put inside since it is python
-                    tempmarker.header.frame_id = "map"
-                    tempmarker.header.stamp = rospy.Time.now()
-                    tempmarker.ns = "zzz/cognition"
-                    tempmarker.id = count
-                    tempmarker.type = Marker.TEXT_VIEW_FACING
-                    tempmarker.action = Marker.ADD
-                    hahaha = obs.state.pose.pose.position.z + 1.0
-                    tempmarker.pose.position.x = obs.state.pose.pose.position.x
-                    tempmarker.pose.position.y = obs.state.pose.pose.position.y
-                    tempmarker.pose.position.z = hahaha
-                    tempmarker.scale.z = 0.6
-                    tempmarker.color.r = 1.0
-                    tempmarker.color.g = 0.0
-                    tempmarker.color.b = 1.0
-                    tempmarker.color.a = 0.5
-                    tempmarker.text = " lane_index: " + str(obs.lane_index) + "\n lane_dist_right_t: " + str(obs.lane_dist_right_t) + "\n lane_dist_left_t: " + str(obs.lane_dist_left_t) + "\n lane_anglediff: " + str(obs.lane_anglediff)
-                    tempmarker.lifetime = rospy.Duration(0.5)
-
-                    self._obstacles_label_markerarray.markers.append(tempmarker)
-                    count = count + 1
-
-
-        #5. ego vehicle visualization
-        self._ego_markerarray = MarkerArray()
-
-        tempmarker = Marker()
-        tempmarker.header.frame_id = "map"
-        tempmarker.header.stamp = rospy.Time.now()
-        tempmarker.ns = "zzz/cognition"
-        tempmarker.id = 1
-        tempmarker.type = Marker.CUBE
-        tempmarker.action = Marker.ADD
-        tempmarker.pose = tstates.ego_vehicle_state.state.pose.pose
-        tempmarker.scale.x = 4.0 #jxy: I don't know...
-        tempmarker.scale.y = 2.0
-        tempmarker.scale.z = 1.8
-        tempmarker.color.r = 1.0
-        tempmarker.color.g = 0.0
-        tempmarker.color.b = 0.0
-        tempmarker.color.a = 0.5
-        tempmarker.lifetime = rospy.Duration(0.5)
-
-        self._ego_markerarray.markers.append(tempmarker)
-
-        #quaternion transform for ego velocity
-
-        x = tstates.ego_vehicle_state.state.pose.pose.orientation.x
-        y = tstates.ego_vehicle_state.state.pose.pose.orientation.y
-        z = tstates.ego_vehicle_state.state.pose.pose.orientation.z
-        w = tstates.ego_vehicle_state.state.pose.pose.orientation.w
-
-        # rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
-        # rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
-
-        vel_self = np.array([[tstates.ego_vehicle_state.state.twist.twist.linear.x], [tstates.ego_vehicle_state.state.twist.twist.linear.y], [tstates.ego_vehicle_state.state.twist.twist.linear.z]])
-        # vel_world = np.matmul(rotation_mat_inverse, vel_self)
-        # #check if it should be reversed
-        ego_vx_world = vel_self[0]
-        ego_vy_world = vel_self[1]
-        ego_vz_world = vel_self[2]
-
-        # ego_vx_world = self._ego_vehicle_state.state.twist.twist.linear.x
-        # ego_vy_world = self._ego_vehicle_state.state.twist.twist.linear.y
-        # ego_vz_world = self._ego_vehicle_state.state.twist.twist.linear.z
-
-        tempmarker = Marker()
-        tempmarker.header.frame_id = "map"
-        tempmarker.header.stamp = rospy.Time.now()
-        tempmarker.ns = "zzz/cognition"
-        tempmarker.id = 2
-        tempmarker.type = Marker.ARROW
-        tempmarker.action = Marker.ADD
-        tempmarker.scale.x = 0.4
-        tempmarker.scale.y = 0.7
-        tempmarker.scale.z = 0.75
-        tempmarker.color.r = 1.0
-        tempmarker.color.g = 1.0
-        tempmarker.color.b = 0.0
-        tempmarker.color.a = 0.5
-        tempmarker.lifetime = rospy.Duration(0.5)
-
-        startpoint = Point()
-        endpoint = Point()
-        startpoint.x = tstates.ego_vehicle_state.state.pose.pose.position.x
-        startpoint.y = tstates.ego_vehicle_state.state.pose.pose.position.y
-        startpoint.z = tstates.ego_vehicle_state.state.pose.pose.position.z
-        endpoint.x = tstates.ego_vehicle_state.state.pose.pose.position.x + ego_vx_world
-        endpoint.y = tstates.ego_vehicle_state.state.pose.pose.position.y + ego_vy_world
-        endpoint.z = tstates.ego_vehicle_state.state.pose.pose.position.z + ego_vz_world
-        tempmarker.points.append(startpoint)
-        tempmarker.points.append(endpoint)
-
-        self._ego_markerarray.markers.append(tempmarker)
-
-        #6. drivable area
-        self._drivable_area_markerarray = MarkerArray()
-
-        count = 0
-        if len(tstates.drivable_area) != 0:
-            
-            tempmarker = Marker() #jxy: must be put inside since it is python
-            tempmarker.header.frame_id = "map"
-            tempmarker.header.stamp = rospy.Time.now()
-            tempmarker.ns = "zzz/cognition"
-            tempmarker.id = count
-            tempmarker.type = Marker.LINE_STRIP
-            tempmarker.action = Marker.ADD
-            tempmarker.scale.x = 0.20
-            tempmarker.color.r = 1.0
-            tempmarker.color.g = 1.0
-            tempmarker.color.b = 0.0
-            tempmarker.color.a = 0.5
-            tempmarker.lifetime = rospy.Duration(0.5)
-
-            for i in range(len(tstates.drivable_area)):
-                point = tstates.drivable_area[i]
-                p = Point()
-                p.x = point[0]
-                p.y = point[1]
-                p.z = 0 #TODO: the map does not provide z value
-                tempmarker.points.append(p)
-            self._drivable_area_markerarray.markers.append(tempmarker)
-            count = count + 1
-
-        #7. next drivable area
-        self._next_drivable_area_markerarray = MarkerArray()
-
-        count = 0
-        if len(tstates.next_drivable_area) != 0:
-            
-            tempmarker = Marker() #jxy: must be put inside since it is python
-            tempmarker.header.frame_id = "map"
-            tempmarker.header.stamp = rospy.Time.now()
-            tempmarker.ns = "zzz/cognition"
-            tempmarker.id = count
-            tempmarker.type = Marker.LINE_STRIP
-            tempmarker.action = Marker.ADD
-            tempmarker.scale.x = 0.20
-            tempmarker.color.r = 0.0
-            tempmarker.color.g = 1.0
-            tempmarker.color.b = 0.0
-            tempmarker.color.a = 0.5
-            tempmarker.lifetime = rospy.Duration(0.5)
-
-            for point in tstates.next_drivable_area:
-                p = Point()
-                p.x = point[0]
-                p.y = point[1]
-                p.z = 0 #TODO: the map does not provide z value
-                tempmarker.points.append(p)
-            self._next_drivable_area_markerarray.markers.append(tempmarker)
-            count = count + 1
-
-            '''#stress the dynamic parts
-            for i in range(len(tstates.next_drivable_area)):
-                point = tstates.next_drivable_area[i]
-                if abs(point[2]) < 0.1 and abs(point[3]) < 0.1:
-                    continue
-
-                if i != len(tstates.next_drivable_area) - 1:
-                    next_point = tstates.next_drivable_area[i+1]
-                else:
-                    # this is actually tstates.next_drivable_area[0] for closing the figure
-                    continue
-
-                tempmarker = Marker() #jxy: must be put inside since it is python
-                tempmarker.header.frame_id = "map"
-                tempmarker.header.stamp = rospy.Time.now()
-                tempmarker.ns = "zzz/cognition"
-                tempmarker.id = count
-                tempmarker.type = Marker.ARROW
-                tempmarker.action = Marker.ADD
-                tempmarker.scale.x = 0.40
-                tempmarker.scale.y = 0.75
-                tempmarker.scale.z = 0.75
-                tempmarker.color.r = 0.0
-                tempmarker.color.g = 0.0
-                tempmarker.color.b = 1.0
-                tempmarker.color.a = 1.0
-                tempmarker.lifetime = rospy.Duration(0.5)
-
-                #the velocity of i is the section velocity between point i and point i+1
-                startpoint = Point()
-                endpoint = Point()
-                startpoint.x = (point[0] + next_point[0])/2.0
-                startpoint.y = (point[1] + next_point[1])/2.0
-                startpoint.z = 0.0
-                endpoint.x = (point[0] + next_point[0])/2.0 + point[2]
-                endpoint.y = (point[1] + next_point[1])/2.0 + point[3]
-                endpoint.z = 0.0
-                tempmarker.points.append(startpoint)
-                tempmarker.points.append(endpoint)
-
-                self._next_drivable_area_markerarray.markers.append(tempmarker)
-                count = count + 1'''
-
-        #8. next lanes
-        self._next_lanes_markerarray = MarkerArray()
-
-        count = 0
-        if len(tstates.static_map.next_lanes) != 0:
-            biggest_id = 0 #TODO: better way to find the smallest id
-            
-            for lane in tstates.static_map.next_lanes:
-                if lane.index > biggest_id:
-                    biggest_id = lane.index
-                tempmarker = Marker() #jxy: must be put inside since it is python
-                tempmarker.header.frame_id = "map"
-                tempmarker.header.stamp = rospy.Time.now()
-                tempmarker.ns = "zzz/cognition"
-                tempmarker.id = count
-                tempmarker.type = Marker.LINE_STRIP
-                tempmarker.action = Marker.ADD
-                tempmarker.scale.x = 0.12
-                tempmarker.color.r = 0.7
-                tempmarker.color.g = 0.0
-                tempmarker.color.b = 0.0
-                tempmarker.color.a = 0.5
-                tempmarker.lifetime = rospy.Duration(0.5)
-
-                for lanepoint in lane.central_path_points:
-                    p = Point()
-                    p.x = lanepoint.position.x
-                    p.y = lanepoint.position.y
-                    p.z = lanepoint.position.z
-                    tempmarker.points.append(p)
-                self._next_lanes_markerarray.markers.append(tempmarker)
-                count = count + 1
-
-        #9. next lane boundary line
-        self._next_lanes_boundary_markerarray = MarkerArray()
-
-        count = 0
-        if len(tstates.static_map.next_lanes) != 0:
-            
-            for lane in tstates.static_map.next_lanes:
-                if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
-                    tempmarker = Marker() #jxy: must be put inside since it is python
-                    tempmarker.header.frame_id = "map"
-                    tempmarker.header.stamp = rospy.Time.now()
-                    tempmarker.ns = "zzz/cognition"
-                    tempmarker.id = count
-
-                    #each lane has the right boundary, only the lane with the smallest id has the left boundary
-                    tempmarker.type = Marker.LINE_STRIP
-                    tempmarker.action = Marker.ADD
-                    tempmarker.scale.x = 0.15
-                    
-                    if lane.right_boundaries[0].boundary_type == 1: #broken lane is set gray
-                        tempmarker.color.r = 0.4
-                        tempmarker.color.g = 0.4
-                        tempmarker.color.b = 0.4
-                        tempmarker.color.a = 0.5
-                    else:
-                        tempmarker.color.r = 0.7
-                        tempmarker.color.g = 0.7
-                        tempmarker.color.b = 0.7
-                        tempmarker.color.a = 0.5
-                    tempmarker.lifetime = rospy.Duration(0.5)
-
-                    for lb in lane.right_boundaries:
-                        p = Point()
-                        p.x = lb.boundary_point.position.x
-                        p.y = lb.boundary_point.position.y
-                        p.z = lb.boundary_point.position.z
-                        tempmarker.points.append(p)
-                    self._next_lanes_boundary_markerarray.markers.append(tempmarker)
-                    count = count + 1
-
-                    #biggest id: draw left lane
-                    if lane.index == biggest_id:
-                        tempmarker = Marker() #jxy: must be put inside since it is python
-                        tempmarker.header.frame_id = "map"
-                        tempmarker.header.stamp = rospy.Time.now()
-                        tempmarker.ns = "zzz/cognition"
-                        tempmarker.id = count
-
-                        #each lane has the right boundary, only the lane with the biggest id has the left boundary
-                        tempmarker.type = Marker.LINE_STRIP
-                        tempmarker.action = Marker.ADD
-                        tempmarker.scale.x = 0.3
-                        if lane.left_boundaries[0].boundary_type == 1: #broken lane is set gray
-                            tempmarker.color.r = 0.4
-                            tempmarker.color.g = 0.4
-                            tempmarker.color.b = 0.4
-                            tempmarker.color.a = 0.5
-                        else:
-                            tempmarker.color.r = 0.7
-                            tempmarker.color.g = 0.7
-                            tempmarker.color.b = 0.7
-                            tempmarker.color.a = 0.5
-                        tempmarker.lifetime = rospy.Duration(0.5)
-
-                        for lb in lane.left_boundaries:
-                            p = Point()
-                            p.x = lb.boundary_point.position.x
-                            p.y = lb.boundary_point.position.y
-                            p.z = lb.boundary_point.position.z
-                            tempmarker.points.append(p)
-                        self._next_lanes_boundary_markerarray.markers.append(tempmarker)
-                        count = count + 1
-
-        #10. traffic lights
-        self._traffic_lights_markerarray = MarkerArray()
-        #TODO: now no lights are in. I'll check it when I run the codes.
-        #lights = self._traffic_light_detection.detections
+        t6 = time.time()
+        rospy.loginfo("initialize time consumption: %f ms", (t2 - t1) * 1000)
+        rospy.loginfo("predict obstacles time consumption: %f ms", (t3 - t2) * 1000)
+        rospy.loginfo("locate obstacle time consumption: %f ms", (t4 - t3) * 1000)
+        rospy.loginfo("dynamic boundary construction time consumption: %f ms", (t5 - t4) * 1000)
+        rospy.loginfo("output and visualization time consumption: %f ms", (t6 - t5) * 1000)
+        rospy.loginfo("total time: %f ms", (t6 - t1) * 1000)
         
         rospy.logdebug("Updated driving space")
 
@@ -848,16 +297,15 @@ class DrivingSpaceConstructor:
                 return lane_index_return, lane_dist_left_t, lane_dist_right_t, lane_anglediff, lane_dist_s
         
 
-    def locate_obstacle_in_lanes(self, tstates):
-        tstates.obstacles = [] #clear in every step
-        if tstates.surrounding_object_list == None:
+    def locate_obstacle_in_lanes(self, tstates, time_step):
+        obstacles_step = tstates.surrounding_object_list_timelist[time_step]
+        if obstacles_step == None:
             return
-        for obj in tstates.surrounding_object_list:
+        for obj in obstacles_step:
             if len(tstates.static_map.lanes) != 0:
                 obj.lane_index, obj.lane_dist_left_t, obj.lane_dist_right_t, obj.lane_anglediff, obj.lane_dist_s = self.locate_object_in_lane(obj.state, tstates, obj.dimension)
             else:
                 obj.lane_index = -1
-            tstates.obstacles.append(obj)
 
     def locate_ego_vehicle_in_lanes(self, tstates, lane_end_dist_thres=2, lane_dist_thres=5):
         dist_list = np.array([dist_from_point_to_polyline2d(
@@ -935,3 +383,484 @@ class DrivingSpaceConstructor:
         total_lane_num = len(tstates.static_map.lanes)
         for i in range(total_lane_num):
             tstates.static_map.lanes[i].speed_limit = 40
+
+    def visualization(self, tstates):
+
+        #visualization
+        #1. lanes
+        self._lanes_markerarray = MarkerArray()
+
+        count = 0
+        if not (tstates.static_map.in_junction):
+            biggest_id = 0 #TODO: better way to find the smallest id
+            
+            for lane in tstates.static_map.lanes:
+                if lane.index > biggest_id:
+                    biggest_id = lane.index
+                tempmarker = Marker() #jxy: must be put inside since it is python
+                tempmarker.header.frame_id = "map"
+                tempmarker.header.stamp = rospy.Time.now()
+                tempmarker.ns = "zzz/cognition"
+                tempmarker.id = count
+                tempmarker.type = Marker.LINE_STRIP
+                tempmarker.action = Marker.ADD
+                tempmarker.scale.x = 0.12
+                tempmarker.color.r = 1.0
+                tempmarker.color.g = 0.0
+                tempmarker.color.b = 0.0
+                tempmarker.color.a = 0.5
+                tempmarker.lifetime = rospy.Duration(0.5)
+
+                for lanepoint in lane.central_path_points:
+                    p = Point()
+                    p.x = lanepoint.position.x
+                    p.y = lanepoint.position.y
+                    p.z = lanepoint.position.z
+                    tempmarker.points.append(p)
+                self._lanes_markerarray.markers.append(tempmarker)
+                count = count + 1
+
+        #2. lane boundary line
+        self._lanes_boundary_markerarray = MarkerArray()
+
+        count = 0
+        if not (tstates.static_map.in_junction):
+            #does not draw lane when ego vehicle is in the junction
+            
+            for lane in tstates.static_map.lanes:
+                if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
+                    tempmarker = Marker() #jxy: must be put inside since it is python
+                    tempmarker.header.frame_id = "map"
+                    tempmarker.header.stamp = rospy.Time.now()
+                    tempmarker.ns = "zzz/cognition"
+                    tempmarker.id = count
+
+                    #each lane has the right boundary, only the lane with the smallest id has the left boundary
+                    tempmarker.type = Marker.LINE_STRIP
+                    tempmarker.action = Marker.ADD
+                    tempmarker.scale.x = 0.15
+                    if lane.right_boundaries[0].boundary_type == 1: #broken lane is set gray
+                        tempmarker.color.r = 0.6
+                        tempmarker.color.g = 0.6
+                        tempmarker.color.b = 0.5
+                        tempmarker.color.a = 0.5
+                    else:
+                        tempmarker.color.r = 1.0
+                        tempmarker.color.g = 1.0
+                        tempmarker.color.b = 1.0
+                        tempmarker.color.a = 0.5
+                    tempmarker.lifetime = rospy.Duration(0.5)
+
+                    for lb in lane.right_boundaries:
+                        p = Point()
+                        p.x = lb.boundary_point.position.x
+                        p.y = lb.boundary_point.position.y
+                        p.z = lb.boundary_point.position.z
+                        tempmarker.points.append(p)
+                    self._lanes_boundary_markerarray.markers.append(tempmarker)
+                    count = count + 1
+
+                    #biggest id: draw left lane
+                    if lane.index == biggest_id:
+                        tempmarker = Marker() #jxy: must be put inside since it is python
+                        tempmarker.header.frame_id = "map"
+                        tempmarker.header.stamp = rospy.Time.now()
+                        tempmarker.ns = "zzz/cognition"
+                        tempmarker.id = count
+
+                        #each lane has the right boundary, only the lane with the biggest id has the left boundary
+                        tempmarker.type = Marker.LINE_STRIP
+                        tempmarker.action = Marker.ADD
+                        tempmarker.scale.x = 0.3
+                        if lane.left_boundaries[0].boundary_type == 1: #broken lane is set gray
+                            tempmarker.color.r = 0.6
+                            tempmarker.color.g = 0.6
+                            tempmarker.color.b = 0.6
+                            tempmarker.color.a = 0.5
+                        else:
+                            tempmarker.color.r = 1.0
+                            tempmarker.color.g = 1.0
+                            tempmarker.color.b = 1.0
+                            tempmarker.color.a = 0.5
+                        tempmarker.lifetime = rospy.Duration(0.5)
+
+                        for lb in lane.left_boundaries:
+                            p = Point()
+                            p.x = lb.boundary_point.position.x
+                            p.y = lb.boundary_point.position.y
+                            p.z = lb.boundary_point.position.z
+                            tempmarker.points.append(p)
+                        self._lanes_boundary_markerarray.markers.append(tempmarker)
+                        count = count + 1
+
+        #3. obstacle
+        self._obstacles_markerarray = MarkerArray()
+        
+        count = 0
+        if tstates.surrounding_object_list_timelist[5] is not None:
+            for obs in tstates.surrounding_object_list_timelist[5]:
+                dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
+                    + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
+                
+                if dist_to_ego < 50:
+                    tempmarker = Marker() #jxy: must be put inside since it is python
+                    tempmarker.header.frame_id = "map"
+                    tempmarker.header.stamp = rospy.Time.now()
+                    tempmarker.ns = "zzz/cognition"
+                    tempmarker.id = count
+                    tempmarker.type = Marker.CUBE
+                    tempmarker.action = Marker.ADD
+                    tempmarker.pose = obs.state.pose.pose
+                    tempmarker.scale.x = obs.dimension.length_x
+                    tempmarker.scale.y = obs.dimension.length_y
+                    tempmarker.scale.z = obs.dimension.length_z
+                    if obs.lane_index == -1:
+                        tempmarker.color.r = 0.5
+                        tempmarker.color.g = 0.5
+                        tempmarker.color.b = 0.5
+                    elif obs.lane_dist_left_t == 0 or obs.lane_dist_right_t == 0:
+                        # those who is on the lane boundary, warn by yellow
+                        tempmarker.color.r = 1.0
+                        tempmarker.color.g = 1.0
+                        tempmarker.color.b = 0.0
+                    else:
+                        tempmarker.color.r = 1.0
+                        tempmarker.color.g = 0.0
+                        tempmarker.color.b = 1.0
+                    if tstates.static_map.in_junction:
+                        tempmarker.color.r = 1.0
+                        tempmarker.color.g = 0.0
+                        tempmarker.color.b = 1.0
+                    tempmarker.color.a = 0.5
+                    tempmarker.lifetime = rospy.Duration(0.5)
+
+                    self._obstacles_markerarray.markers.append(tempmarker)
+                    count = count + 1
+            
+            for obs in tstates.surrounding_object_list_timelist[5]:
+                dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
+                    + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
+                
+                if dist_to_ego < 50:
+                    tempmarker = Marker() #jxy: must be put inside since it is python
+                    tempmarker.header.frame_id = "map"
+                    tempmarker.header.stamp = rospy.Time.now()
+                    tempmarker.ns = "zzz/cognition"
+                    tempmarker.id = count
+                    tempmarker.type = Marker.ARROW
+                    tempmarker.action = Marker.ADD
+                    tempmarker.scale.x = 0.4
+                    tempmarker.scale.y = 0.7
+                    tempmarker.scale.z = 0.75
+                    tempmarker.color.r = 1.0
+                    tempmarker.color.g = 1.0
+                    tempmarker.color.b = 0.0
+                    tempmarker.color.a = 0.5
+                    tempmarker.lifetime = rospy.Duration(0.5)
+
+                    #quaternion transform for obs velocity in carla 0.9.8
+
+                    x = obs.state.pose.pose.orientation.x
+                    y = obs.state.pose.pose.orientation.y
+                    z = obs.state.pose.pose.orientation.z
+                    w = obs.state.pose.pose.orientation.w
+
+                    #rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
+                    #rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
+
+                    vel_obs = np.array([obs.state.twist.twist.linear.x, obs.state.twist.twist.linear.y, obs.state.twist.twist.linear.z])
+                    #vel_world = np.matmul(rotation_mat, vel_obs)
+                    #vel_world = vel_obs
+                    #check if it should be reversed
+                    obs_vx_world = vel_obs[0]
+                    obs_vy_world = vel_obs[1]
+                    obs_vz_world = vel_obs[2]
+
+                    startpoint = Point()
+                    endpoint = Point()
+                    startpoint.x = obs.state.pose.pose.position.x
+                    startpoint.y = obs.state.pose.pose.position.y
+                    startpoint.z = obs.state.pose.pose.position.z
+                    endpoint.x = obs.state.pose.pose.position.x + obs_vx_world
+                    endpoint.y = obs.state.pose.pose.position.y + obs_vy_world
+                    endpoint.z = obs.state.pose.pose.position.z + obs_vz_world
+                    tempmarker.points.append(startpoint)
+                    tempmarker.points.append(endpoint)
+
+                    self._obstacles_markerarray.markers.append(tempmarker)
+                    count = count + 1
+
+        #4. the labels of objects
+        self._obstacles_label_markerarray = MarkerArray()
+
+        count = 0
+        if tstates.surrounding_object_list_timelist[5] is not None:                    
+            for obs in tstates.surrounding_object_list_timelist[5]:
+                dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
+                    + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
+                
+                if dist_to_ego < 50:
+                    tempmarker = Marker() #jxy: must be put inside since it is python
+                    tempmarker.header.frame_id = "map"
+                    tempmarker.header.stamp = rospy.Time.now()
+                    tempmarker.ns = "zzz/cognition"
+                    tempmarker.id = count
+                    tempmarker.type = Marker.TEXT_VIEW_FACING
+                    tempmarker.action = Marker.ADD
+                    hahaha = obs.state.pose.pose.position.z + 1.0
+                    tempmarker.pose.position.x = obs.state.pose.pose.position.x
+                    tempmarker.pose.position.y = obs.state.pose.pose.position.y
+                    tempmarker.pose.position.z = hahaha
+                    tempmarker.scale.z = 0.6
+                    tempmarker.color.r = 1.0
+                    tempmarker.color.g = 0.0
+                    tempmarker.color.b = 1.0
+                    tempmarker.color.a = 0.5
+                    tempmarker.text = " lane_index: " + str(obs.lane_index) + "\n lane_dist_right_t: " + str(obs.lane_dist_right_t) + "\n lane_dist_left_t: " + str(obs.lane_dist_left_t) + "\n lane_anglediff: " + str(obs.lane_anglediff)
+                    tempmarker.lifetime = rospy.Duration(0.5)
+
+                    self._obstacles_label_markerarray.markers.append(tempmarker)
+                    count = count + 1
+
+
+        #5. ego vehicle visualization
+        self._ego_markerarray = MarkerArray()
+
+        tempmarker = Marker()
+        tempmarker.header.frame_id = "map"
+        tempmarker.header.stamp = rospy.Time.now()
+        tempmarker.ns = "zzz/cognition"
+        tempmarker.id = 1
+        tempmarker.type = Marker.CUBE
+        tempmarker.action = Marker.ADD
+        tempmarker.pose = tstates.ego_vehicle_state.state.pose.pose
+        tempmarker.scale.x = 4.0 #jxy: I don't know...
+        tempmarker.scale.y = 2.0
+        tempmarker.scale.z = 1.8
+        tempmarker.color.r = 1.0
+        tempmarker.color.g = 0.0
+        tempmarker.color.b = 0.0
+        tempmarker.color.a = 0.5
+        tempmarker.lifetime = rospy.Duration(0.5)
+
+        self._ego_markerarray.markers.append(tempmarker)
+
+        #quaternion transform for ego velocity
+
+        x = tstates.ego_vehicle_state.state.pose.pose.orientation.x
+        y = tstates.ego_vehicle_state.state.pose.pose.orientation.y
+        z = tstates.ego_vehicle_state.state.pose.pose.orientation.z
+        w = tstates.ego_vehicle_state.state.pose.pose.orientation.w
+
+        # rotation_mat = np.array([[1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y], [2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x], [2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y]])
+        # rotation_mat_inverse = np.linalg.inv(rotation_mat) #those are the correct way to deal with quaternion
+
+        vel_self = np.array([[tstates.ego_vehicle_state.state.twist.twist.linear.x], [tstates.ego_vehicle_state.state.twist.twist.linear.y], [tstates.ego_vehicle_state.state.twist.twist.linear.z]])
+        # vel_world = np.matmul(rotation_mat_inverse, vel_self)
+        # #check if it should be reversed
+        ego_vx_world = vel_self[0]
+        ego_vy_world = vel_self[1]
+        ego_vz_world = vel_self[2]
+
+        # ego_vx_world = self._ego_vehicle_state.state.twist.twist.linear.x
+        # ego_vy_world = self._ego_vehicle_state.state.twist.twist.linear.y
+        # ego_vz_world = self._ego_vehicle_state.state.twist.twist.linear.z
+
+        tempmarker = Marker()
+        tempmarker.header.frame_id = "map"
+        tempmarker.header.stamp = rospy.Time.now()
+        tempmarker.ns = "zzz/cognition"
+        tempmarker.id = 2
+        tempmarker.type = Marker.ARROW
+        tempmarker.action = Marker.ADD
+        tempmarker.scale.x = 0.4
+        tempmarker.scale.y = 0.7
+        tempmarker.scale.z = 0.75
+        tempmarker.color.r = 1.0
+        tempmarker.color.g = 1.0
+        tempmarker.color.b = 0.0
+        tempmarker.color.a = 0.5
+        tempmarker.lifetime = rospy.Duration(0.5)
+
+        startpoint = Point()
+        endpoint = Point()
+        startpoint.x = tstates.ego_vehicle_state.state.pose.pose.position.x
+        startpoint.y = tstates.ego_vehicle_state.state.pose.pose.position.y
+        startpoint.z = tstates.ego_vehicle_state.state.pose.pose.position.z
+        endpoint.x = tstates.ego_vehicle_state.state.pose.pose.position.x + ego_vx_world
+        endpoint.y = tstates.ego_vehicle_state.state.pose.pose.position.y + ego_vy_world
+        endpoint.z = tstates.ego_vehicle_state.state.pose.pose.position.z + ego_vz_world
+        tempmarker.points.append(startpoint)
+        tempmarker.points.append(endpoint)
+
+        self._ego_markerarray.markers.append(tempmarker)
+
+        #6. drivable area
+        self._drivable_area_markerarray = MarkerArray()
+
+        count = 0
+        if len(tstates.drivable_area_timelist[5]) != 0:
+            
+            tempmarker = Marker() #jxy: must be put inside since it is python
+            tempmarker.header.frame_id = "map"
+            tempmarker.header.stamp = rospy.Time.now()
+            tempmarker.ns = "zzz/cognition"
+            tempmarker.id = count
+            tempmarker.type = Marker.LINE_STRIP
+            tempmarker.action = Marker.ADD
+            tempmarker.scale.x = 0.20
+            tempmarker.color.r = 1.0
+            tempmarker.color.g = 1.0
+            tempmarker.color.b = 0.0
+            tempmarker.color.a = 0.5
+            tempmarker.lifetime = rospy.Duration(0.5)
+
+            for i in range(len(tstates.drivable_area_timelist[5])):
+                point = tstates.drivable_area_timelist[5][i]
+                p = Point()
+                p.x = point[0]
+                p.y = point[1]
+                p.z = 0 #TODO: the map does not provide z value
+                tempmarker.points.append(p)
+            self._drivable_area_markerarray.markers.append(tempmarker)
+            count = count + 1
+
+        #7. next drivable area
+        self._next_drivable_area_markerarray = MarkerArray()
+
+        count = 0
+        if len(tstates.next_drivable_area) != 0:
+            
+            tempmarker = Marker() #jxy: must be put inside since it is python
+            tempmarker.header.frame_id = "map"
+            tempmarker.header.stamp = rospy.Time.now()
+            tempmarker.ns = "zzz/cognition"
+            tempmarker.id = count
+            tempmarker.type = Marker.LINE_STRIP
+            tempmarker.action = Marker.ADD
+            tempmarker.scale.x = 0.20
+            tempmarker.color.r = 0.0
+            tempmarker.color.g = 1.0
+            tempmarker.color.b = 0.0
+            tempmarker.color.a = 0.5
+            tempmarker.lifetime = rospy.Duration(0.5)
+
+            for point in tstates.next_drivable_area:
+                p = Point()
+                p.x = point[0]
+                p.y = point[1]
+                p.z = 0 #TODO: the map does not provide z value
+                tempmarker.points.append(p)
+            self._next_drivable_area_markerarray.markers.append(tempmarker)
+            count = count + 1
+
+        #8. next lanes
+        self._next_lanes_markerarray = MarkerArray()
+
+        count = 0
+        if len(tstates.static_map.next_lanes) != 0:
+            biggest_id = 0 #TODO: better way to find the smallest id
+            
+            for lane in tstates.static_map.next_lanes:
+                if lane.index > biggest_id:
+                    biggest_id = lane.index
+                tempmarker = Marker() #jxy: must be put inside since it is python
+                tempmarker.header.frame_id = "map"
+                tempmarker.header.stamp = rospy.Time.now()
+                tempmarker.ns = "zzz/cognition"
+                tempmarker.id = count
+                tempmarker.type = Marker.LINE_STRIP
+                tempmarker.action = Marker.ADD
+                tempmarker.scale.x = 0.12
+                tempmarker.color.r = 0.7
+                tempmarker.color.g = 0.0
+                tempmarker.color.b = 0.0
+                tempmarker.color.a = 0.5
+                tempmarker.lifetime = rospy.Duration(0.5)
+
+                for lanepoint in lane.central_path_points:
+                    p = Point()
+                    p.x = lanepoint.position.x
+                    p.y = lanepoint.position.y
+                    p.z = lanepoint.position.z
+                    tempmarker.points.append(p)
+                self._next_lanes_markerarray.markers.append(tempmarker)
+                count = count + 1
+
+        #9. next lane boundary line
+        self._next_lanes_boundary_markerarray = MarkerArray()
+
+        count = 0
+        if len(tstates.static_map.next_lanes) != 0:
+            
+            for lane in tstates.static_map.next_lanes:
+                if len(lane.right_boundaries) > 0 and len(lane.left_boundaries) > 0:
+                    tempmarker = Marker() #jxy: must be put inside since it is python
+                    tempmarker.header.frame_id = "map"
+                    tempmarker.header.stamp = rospy.Time.now()
+                    tempmarker.ns = "zzz/cognition"
+                    tempmarker.id = count
+
+                    #each lane has the right boundary, only the lane with the smallest id has the left boundary
+                    tempmarker.type = Marker.LINE_STRIP
+                    tempmarker.action = Marker.ADD
+                    tempmarker.scale.x = 0.15
+                    
+                    if lane.right_boundaries[0].boundary_type == 1: #broken lane is set gray
+                        tempmarker.color.r = 0.4
+                        tempmarker.color.g = 0.4
+                        tempmarker.color.b = 0.4
+                        tempmarker.color.a = 0.5
+                    else:
+                        tempmarker.color.r = 0.7
+                        tempmarker.color.g = 0.7
+                        tempmarker.color.b = 0.7
+                        tempmarker.color.a = 0.5
+                    tempmarker.lifetime = rospy.Duration(0.5)
+
+                    for lb in lane.right_boundaries:
+                        p = Point()
+                        p.x = lb.boundary_point.position.x
+                        p.y = lb.boundary_point.position.y
+                        p.z = lb.boundary_point.position.z
+                        tempmarker.points.append(p)
+                    self._next_lanes_boundary_markerarray.markers.append(tempmarker)
+                    count = count + 1
+
+                    #biggest id: draw left lane
+                    if lane.index == biggest_id:
+                        tempmarker = Marker() #jxy: must be put inside since it is python
+                        tempmarker.header.frame_id = "map"
+                        tempmarker.header.stamp = rospy.Time.now()
+                        tempmarker.ns = "zzz/cognition"
+                        tempmarker.id = count
+
+                        #each lane has the right boundary, only the lane with the biggest id has the left boundary
+                        tempmarker.type = Marker.LINE_STRIP
+                        tempmarker.action = Marker.ADD
+                        tempmarker.scale.x = 0.3
+                        if lane.left_boundaries[0].boundary_type == 1: #broken lane is set gray
+                            tempmarker.color.r = 0.4
+                            tempmarker.color.g = 0.4
+                            tempmarker.color.b = 0.4
+                            tempmarker.color.a = 0.5
+                        else:
+                            tempmarker.color.r = 0.7
+                            tempmarker.color.g = 0.7
+                            tempmarker.color.b = 0.7
+                            tempmarker.color.a = 0.5
+                        tempmarker.lifetime = rospy.Duration(0.5)
+
+                        for lb in lane.left_boundaries:
+                            p = Point()
+                            p.x = lb.boundary_point.position.x
+                            p.y = lb.boundary_point.position.y
+                            p.z = lb.boundary_point.position.z
+                            tempmarker.points.append(p)
+                        self._next_lanes_boundary_markerarray.markers.append(tempmarker)
+                        count = count + 1
+
+        #10. traffic lights
+        self._traffic_lights_markerarray = MarkerArray()
+        #TODO: now no lights are in. I'll check it when I run the codes.
+        #lights = self._traffic_light_detection.detections

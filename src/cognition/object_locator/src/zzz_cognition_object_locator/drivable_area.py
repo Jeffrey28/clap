@@ -19,7 +19,39 @@ from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
 from zzz_driver_msgs.utils import get_speed, get_yaw
 
-def calculate_drivable_area(tstates):
+DT = 0.3 #TODO: parameterize
+
+def predict_obstacles(tstates, steps):
+    for i in range(steps):
+        obstacles = tstates.surrounding_object_list
+        pred_obstacles = []
+
+        ego_x = tstates.ego_vehicle_state.state.pose.pose.position.x
+        ego_y = tstates.ego_vehicle_state.state.pose.pose.position.y
+
+        for obstacle in obstacles:
+            x = obstacle.state.pose.pose.position.x
+            y = obstacle.state.pose.pose.position.y
+            vx = obstacle.state.twist.twist.linear.x
+            vy = obstacle.state.twist.twist.linear.y
+            if abs(x - ego_x) + abs(y - ego_y) > 50:
+                continue
+
+            new_obstacle = RoadObstacle()
+
+            new_obstacle.state.pose.pose.position.x = x + vx * DT * i
+            new_obstacle.state.pose.pose.position.y = y + vy * DT * i
+            new_obstacle.state.twist.twist.linear.x = vx
+            new_obstacle.state.twist.twist.linear.y = vy
+            new_obstacle.state.pose.pose.orientation = obstacle.state.pose.pose.orientation
+            new_obstacle.dimension = obstacle.dimension
+            #TODO: may further accelerate by merging the obstacle into a serialized numpy array
+
+            pred_obstacles.append(new_obstacle)
+
+        tstates.surrounding_object_list_timelist.append(pred_obstacles)
+
+def calculate_drivable_areas(tstates, tt):
     '''
     A list of boundary points of drivable area
     '''
@@ -44,6 +76,8 @@ def calculate_drivable_area(tstates):
     skip_list = [] #lane following vehicles, only when ego vehicle is in lanes
 
     if tstates.static_map.in_junction:
+
+        #TODO: avoid repeated calculation of static boundary
 
         # jxy0710: try to merge the next static boundary into the junction boundary to make one closed boundary, then add dynamic objects
         #create a list of lane section, each section is defined as (start point s, end point s)
@@ -148,8 +182,8 @@ def calculate_drivable_area(tstates):
             lane_open_flag.append(1) #default is open
             #TODO: projection to the vertial direction
 
-        for i in range(len(tstates.obstacles)):
-            obstacle = tstates.obstacles[i]
+        for i in range(len(tstates.surrounding_object_list_timelist[tt])):
+            obstacle = tstates.surrounding_object_list_timelist[tt][i]
             if obstacle.lane_index == -1:
                 continue
             else:
@@ -292,15 +326,18 @@ def calculate_drivable_area(tstates):
             id_list.append(-2) #static boundary, nodes (cannot be deleted)
             
     else:
+        tstates.drivable_area_timelist.append([])
         return
 
-    #step 3. consider the vehicles in the junction
+    #step 3. consider the moving obstacles
 
     #jxy202011: if in lanes, first consider the lane-keeping vehicles.
     #if next junction is loaded, those ahead are all considered as free vehicles. Only those behind are considered specially.
     #if next junction is not loaded, all of them should be be considered specially.
 
     t1 = time.time()
+
+    temp_drivable_area = []
     
     check_list = np.zeros(len(dist_list))
     key_node_list_array = np.array(key_node_list)
@@ -308,9 +345,9 @@ def calculate_drivable_area(tstates):
     key_node_list_xy_array = key_node_list_array[:,:2]
     key_node_list_xy_array = np.vstack((key_node_list_xy_array, key_node_list_xy_array[0])) #close the figure
 
-    if len(tstates.surrounding_object_list) != 0:
-        for i in range(len(tstates.surrounding_object_list)):
-            obs = tstates.surrounding_object_list[i]
+    if len(tstates.surrounding_object_list_timelist[tt]) != 0:
+        for i in range(len(tstates.surrounding_object_list_timelist[tt])):
+            obs = tstates.surrounding_object_list_timelist[tt][i]
             dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
                 + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
 
@@ -418,20 +455,17 @@ def calculate_drivable_area(tstates):
         omega = omega_list[j]
         flag = flag_list[j]
         point = [x, y, vx, vy, base_x, base_y, omega, flag]
-        tstates.drivable_area.append(point)
+        temp_drivable_area.append(point)
     
     
     #close the figure
-    if len(tstates.drivable_area) > 0:
-        tstates.drivable_area.append(tstates.drivable_area[0])
+    if len(temp_drivable_area) > 0:
+        temp_drivable_area.append(temp_drivable_area[0])
+
+    tstates.drivable_area_timelist.append(temp_drivable_area)
 
     t2 = time.time()
-    rospy.loginfo("object consideration time: %f ms", (t2 - t1) * 1000)
-    fw = open("/home/carla/ZZZ/record_single_object_time.txt", 'a')
-    fw.write("2 ")
-    fw.write("%.2f"%((t2 - t1) * 1000))
-    fw.write("\n")
-    fw.close()
+    rospy.loginfo("multi time step object consideration time: %f ms", (t2 - t1) * 1000)
 
     #rospy.loginfo("drivable_area constructed with length %d", len(tstates.drivable_area))
 
