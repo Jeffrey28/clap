@@ -15,7 +15,7 @@ from zzz_cognition_msgs.utils import convert_tracking_box, default_msg as cognit
 from zzz_perception_msgs.msg import TrackingBoxArray, DetectionBoxArray, ObjectSignals, DimensionWithCovariance
 from zzz_common.geometry import dist_from_point_to_polyline2d, wrap_angle
 from zzz_common.kinematics import get_frenet_state
-from zzz_cognition_msgs.msg import DrivingSpace, DynamicBoundary, DynamicBoundaryPoint
+from zzz_cognition_msgs.msg import DrivingSpace, DynamicBoundaryList, DynamicBoundary, DynamicBoundaryPoint
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
 from zzz_driver_msgs.utils import get_speed, get_yaw
@@ -147,21 +147,26 @@ class DrivingSpaceConstructor:
         rospy.logdebug("len(self._static_map.lanes): %d", len(tstates.static_map.lanes))
 
         #jxy1202: will change output at final step
-        self.dynamic_boundary = DynamicBoundary()
-        self.dynamic_boundary.header.frame_id = "map"
-        self.dynamic_boundary.header.stamp = rospy.Time.now()
-        for i in range(len(tstates.drivable_area_timelist[0])):
-            drivable_area_point = tstates.drivable_area_timelist[0][i]
-            boundary_point = DynamicBoundaryPoint()
-            boundary_point.x = drivable_area_point[0]
-            boundary_point.y = drivable_area_point[1]
-            boundary_point.vx = drivable_area_point[2]
-            boundary_point.vy = drivable_area_point[3]
-            boundary_point.base_x = drivable_area_point[4]
-            boundary_point.base_y = drivable_area_point[5]
-            boundary_point.omega = drivable_area_point[6]
-            boundary_point.flag = drivable_area_point[7]
-            self.dynamic_boundary.boundary.append(boundary_point)
+        self.dynamic_boundary_list = DynamicBoundaryList()
+        self.dynamic_boundary_list.header.frame_id = "map"
+        self.dynamic_boundary_list.header.stamp = rospy.Time.now()
+        for tt in range(STEPS):
+            dynamic_boundary = DynamicBoundary()
+            dynamic_boundary.header.frame_id = "map"
+            dynamic_boundary.header.stamp = rospy.Time.now()
+            for i in range(len(tstates.drivable_area_timelist[tt])):
+                drivable_area_point = tstates.drivable_area_timelist[tt][i]
+                boundary_point = DynamicBoundaryPoint()
+                boundary_point.x = drivable_area_point[0]
+                boundary_point.y = drivable_area_point[1]
+                boundary_point.vx = drivable_area_point[2]
+                boundary_point.vy = drivable_area_point[3]
+                boundary_point.base_x = drivable_area_point[4]
+                boundary_point.base_y = drivable_area_point[5]
+                boundary_point.omega = drivable_area_point[6]
+                boundary_point.flag = drivable_area_point[7]
+                dynamic_boundary.boundary.append(boundary_point)
+            self.dynamic_boundary_list.boundary_list.append(dynamic_boundary)
 
         self.visualization(tstates)
 
@@ -497,8 +502,8 @@ class DrivingSpaceConstructor:
         self._obstacles_markerarray = MarkerArray()
         
         count = 0
-        if tstates.surrounding_object_list_timelist[5] is not None:
-            for obs in tstates.surrounding_object_list_timelist[5]:
+        if tstates.surrounding_object_list_timelist[0] is not None:
+            for obs in tstates.surrounding_object_list_timelist[0]:
                 dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
                     + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
                 
@@ -537,7 +542,7 @@ class DrivingSpaceConstructor:
                     self._obstacles_markerarray.markers.append(tempmarker)
                     count = count + 1
             
-            for obs in tstates.surrounding_object_list_timelist[5]:
+            for obs in tstates.surrounding_object_list_timelist[0]:
                 dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
                     + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
                 
@@ -594,8 +599,8 @@ class DrivingSpaceConstructor:
         self._obstacles_label_markerarray = MarkerArray()
 
         count = 0
-        if tstates.surrounding_object_list_timelist[5] is not None:                    
-            for obs in tstates.surrounding_object_list_timelist[5]:
+        if tstates.surrounding_object_list_timelist[0] is not None:                    
+            for obs in tstates.surrounding_object_list_timelist[0]:
                 dist_to_ego = math.sqrt(math.pow((obs.state.pose.pose.position.x - tstates.ego_vehicle_state.state.pose.pose.position.x),2) 
                     + math.pow((obs.state.pose.pose.position.y - tstates.ego_vehicle_state.state.pose.pose.position.y),2))
                 
@@ -699,7 +704,7 @@ class DrivingSpaceConstructor:
         self._drivable_area_markerarray = MarkerArray()
 
         count = 0
-        if len(tstates.drivable_area_timelist[5]) != 0:
+        if len(tstates.drivable_area_timelist[0]) != 0:
             
             tempmarker = Marker() #jxy: must be put inside since it is python
             tempmarker.header.frame_id = "map"
@@ -715,8 +720,8 @@ class DrivingSpaceConstructor:
             tempmarker.color.a = 0.5
             tempmarker.lifetime = rospy.Duration(0.5)
 
-            for i in range(len(tstates.drivable_area_timelist[5])):
-                point = tstates.drivable_area_timelist[5][i]
+            for i in range(len(tstates.drivable_area_timelist[0])):
+                point = tstates.drivable_area_timelist[0][i]
                 p = Point()
                 p.x = point[0]
                 p.y = point[1]

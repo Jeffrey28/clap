@@ -16,6 +16,7 @@ add_message_files(DIRECTORY msg FILES
     DrivingSpace.msg
     DynamicBoundary.msg
     DynamicBoundaryPoint.msg
+    DynamicBoundaryList.msg
 )
 
 generate_messages(DEPENDENCIES std_msgs geometry_msgs zzz_perception_msgs zzz_navigation_msgs zzz_driver_msgs)
