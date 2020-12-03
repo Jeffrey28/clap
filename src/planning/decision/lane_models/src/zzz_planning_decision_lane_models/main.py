@@ -6,7 +6,7 @@ from zzz_planning_msgs.msg import DecisionTrajectory
 from threading import Lock
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
-from zzz_cognition_msgs.msg import MapState
+from zzz_cognition_msgs.msg import MapState, DynamicBoundaryList
 from zzz_navigation_msgs.msg import Map
 from zzz_driver_msgs.utils import get_speed, get_yaw
 from zzz_planning_decision_lane_models.local_trajectory import PolylineTrajectory, Werling_planner # TODO(Temps): Should seperate into continous models
@@ -18,6 +18,7 @@ class MainDecision(object):
     def __init__(self, lon_decision=None, lat_decision=None, local_trajectory=None):
         self._dynamic_map_buffer = None
         self._static_map_buffer = None
+        self._dynamic_boundary_buffer = None
 
         self._longitudinal_model_instance = lon_decision
         self._lateral_model_instance = lat_decision
@@ -38,6 +39,10 @@ class MainDecision(object):
         assert type(static_map) == Map
         self._static_map_buffer = static_map
 
+    def receive_dynamic_boundary(self, dynamic_boundary):
+        assert type(dynamic_boundary) == DynamicBoundaryList
+        self._dynamic_boundary_buffer = dynamic_boundary
+
     # update running in main node thread loop
     def update(self, close_to_lane=5):
         '''
@@ -49,6 +54,7 @@ class MainDecision(object):
         else:
             dynamic_map = self._dynamic_map_buffer
             static_map = self._static_map_buffer
+            dynamic_boundary = self._dynamic_boundary_buffer
 
         #TODO: jxy202011: we are achieving united decision, but will always go ahead. Fix when the vehicle is getting to the destination.
 
@@ -76,7 +82,7 @@ class MainDecision(object):
                 self._local_trajectory_instance.prolong_frenet_lane(dynamic_map, static_map)
                 self._load_next_road_flag = 1
             
-            trajectory, local_desired_speed = self._local_trajectory_instance.get_trajectory(dynamic_map, 0, desired_speed, 0)
+            trajectory, local_desired_speed = self._local_trajectory_instance.get_trajectory(dynamic_map, dynamic_boundary, 0, desired_speed, 0)
             #TODO: consider next lanes: which to enter?
 
             msg = DecisionTrajectory()
@@ -124,7 +130,7 @@ class MainDecision(object):
 
             rospy.logdebug("Planning (lanes): target_lane = %d, target_speed = %f km/h, current_speed: %f km/h", changing_lane_index, desired_speed*3.6, ego_speed*3.6)
             
-            trajectory, local_desired_speed = self._local_trajectory_instance.get_trajectory(dynamic_map, changing_lane_index, desired_speed, 1)
+            trajectory, local_desired_speed = self._local_trajectory_instance.get_trajectory(dynamic_map, dynamic_boundary, changing_lane_index, desired_speed, 1)
 
 
             msg = DecisionTrajectory()

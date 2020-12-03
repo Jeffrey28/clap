@@ -525,7 +525,7 @@ class Werling_planner(object):
         self.lanes = []
         self.lanes.append(temp_lane)
 
-    def get_trajectory(self, dynamic_map, target_lane_index, desired_speed, in_lanes_flag):
+    def get_trajectory(self, dynamic_map, dynamic_boundary, target_lane_index, desired_speed, in_lanes_flag):
         # ego_x = dynamic_map.ego_state.pose.pose.position.x
         # ego_y = dynamic_map.ego_state.pose.pose.position.y
 
@@ -544,7 +544,7 @@ class Werling_planner(object):
 
             self.last_target_lane_index = target_lane_index
             
-        return self.lanes[int(target_lane_index)].trajectory_update(dynamic_map, desired_speed, ego_lane_idx)
+        return self.lanes[int(target_lane_index)].trajectory_update(dynamic_map, dynamic_boundary, desired_speed, ego_lane_idx)
 
     def extend_path(self, path):
         

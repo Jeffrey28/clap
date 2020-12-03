@@ -312,7 +312,7 @@ def calculate_drivable_areas(tstates, tt):
                     base_x_list.append(0)
                     base_y_list.append(0)
                     omega_list.append(0)
-                    flag_list.append(1) #static boundary
+                    flag_list.append(1) #static boundary #jxy20201203: warning! FLAG of lane following vehicles should be updated!
                     id_list.append(-1) #static boundary, interp points (can be deleted)
             
             angle_list.append(math.atan2(node_point[1] - ego_y, node_point[0] - ego_x))
