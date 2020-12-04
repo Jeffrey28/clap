@@ -36,7 +36,6 @@ D_T_S = 2 / 3.6  # target speed sampling length [m/s]
 N_S_SAMPLE = 2  # sampling number of target speed
 
 # collision check
-OBSTACLES_CONSIDERED = 5
 ROBOT_RADIUS = 1.7  # robot radius [m], 2.4 for xiaopeng
 RADIUS_SPEED_RATIO = 0.25 # higher speed, bigger circle, 0 for xiaopeng (?)
 MOVE_GAP = 1.0
@@ -284,16 +283,14 @@ class Werling(object):
 
             fp_front_x = fp.x[i] + math.cos(fp.yaw[i]) * MOVE_GAP
             fp_front_y = fp.y[i] + math.sin(fp.yaw[i]) * MOVE_GAP
-            fp_back_x = fp.x[i] - math.cos(fp.yaw[i]) * MOVE_GAP
-            fp_back_y = fp.y[i] - math.sin(fp.yaw[i]) * MOVE_GAP
+            fp_back_x = 2 * fp.x[i] - fp_front_x
+            fp_back_y = 2 * fp.y[i] - fp_front_y
 
-            t1 = time.time()
             dist1, closest_id0, _, = dist_from_point_to_closedpolyline2d(fp_front_x, fp_front_y, boundary_xy_array)
             dist0, closest_id1, _, = dist_from_point_to_closedpolyline2d(fp_back_x, fp_back_y, boundary_xy_array)
-            t2 = time.time()
-            rospy.loginfo("check collision time consumption: %f ms", (t2 - t1) * 1000)
-            #TODO: check the calculation time, if fast, check 4 corners.
+            #TODO: check the calculation time (about 0.1ms), if possible, check 4 corners.
 
+            #collision radius
             radius0 = ROBOT_RADIUS + c_speed * RADIUS_SPEED_RATIO
             radius1 = ROBOT_RADIUS + c_speed * RADIUS_SPEED_RATIO #TODO: consider v
 
@@ -304,13 +301,23 @@ class Werling(object):
 
             if dist0 <= 0 and i == 0:
                 print "still not entered the dynamic boundary"
-                #TODO: check velocity: if we are leaving this boundary section, it will not collide.
-                return True
+                return True            
 
             #TODO: false junction fix for Town05
 
+            #collision check
             if dist0 <= radius0 or dist1 <= radius1:
+                #TODO: check direction: if we are leaving this boundary section, it will not collide.
+                direction = np.array([fp_front_x - fp_back_x, fp_front_y - fp_back_y])
+                if np.dot(direction, np.array([fp_front_x - boundary[closest_id0].x, fp_front_y - boundary[closest_id0].y])) < 0:
+                    print "front leaving collision point!"
+                    return True
+                elif np.dot(direction, np.array([fp_back_x - boundary[closest_id1].x, fp_back_y - boundary[closest_id1].y])) < 0:
+                    print "back leaving collision point!"
+                    return True
                 print "check collision fail!"
+                print dist0
+                print dist1
                 return False
 
             print "check collision OK!"
