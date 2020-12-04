@@ -3,6 +3,7 @@
 import os
 import rospy
 import threading
+import time
 
 from zzz_common.params import parse_private_args
 from zzz_driver_msgs.msg import RigidBodyStateStamped
@@ -37,7 +38,14 @@ class LocatorNode(object):
     def loop(self):
         while not rospy.is_shutdown():
             self._rate.sleep() # TODO(zyxin): remove sleep after ensure the following modules are good
+            t1 = time.time()
             dmap = self._map_instance.update()
+            t2 = time.time()
+            fw = open("/home/carla/ZZZ/record_time_origin.txt", 'a')   
+            fw.write("obstacle locator: ")
+            fw.write(str((t2 - t1) * 1000)) 
+            fw.write("\n")
+            fw.close()
             
             if dmap: self._dynamic_map_publisher.publish(dmap)
 

@@ -54,6 +54,11 @@ class DecisionNode(object):
                 publish_msg = self._decision_instance.update()   
                 t2 = time.time()
                 rospy.loginfo("planning time consumption: %f ms", (t2 - t1) * 1000)
+                fw = open("/home/carla/ZZZ/record_time_origin.txt", 'a')   
+                fw.write("planning: ")
+                fw.write(str((t2 - t1) * 1000)) 
+                fw.write("\n")
+                fw.close()
             except Exception as e:
                 rospy.logerr("Planning (unified): Exception in idm_lane_utility !!! {} \n {}".format(e.message, traceback.format_exc()))
                 pass

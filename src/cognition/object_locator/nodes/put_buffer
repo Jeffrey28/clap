@@ -4,6 +4,7 @@ import os
 import rospy
 import threading
 from zzz_common.params import parse_private_args
+import time
 
 from zzz_driver_msgs.msg import RigidBodyStateStamped
 from zzz_cognition_msgs.msg import MapState
@@ -43,7 +44,14 @@ class Node(object):
 
     def loop(self):
         while not rospy.is_shutdown():
+            t1 = time.time()
             new_map = self._map_instance.update()
+            t2 = time.time()
+            fw = open("/home/carla/ZZZ/record_time_origin.txt", 'a')   
+            fw.write("put buffer: ")
+            fw.write(str((t2 - t1) * 1000)) 
+            fw.write("\n")
+            fw.close()
             if new_map:
                 #rospy.logdebug("Sent reference path, length: %d", len(new_map.jmap.reference_path.map_lane.central_path_points))
                 self._output_map_publisher.publish(new_map)
