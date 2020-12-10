@@ -705,31 +705,103 @@ class DrivingSpaceConstructor:
 
         count = 0
         if len(tstates.drivable_area_timelist[0]) != 0:
-                
-            tempmarker = Marker() #jxy: must be put inside since it is python
-            tempmarker.header.frame_id = "map"
-            tempmarker.header.stamp = rospy.Time.now()
-            tempmarker.ns = "zzz/cognition"
-            tempmarker.id = count
-            tempmarker.type = Marker.LINE_STRIP
-            tempmarker.action = Marker.ADD
-            tempmarker.scale.x = 0.20
-            tempmarker.color.r = 1.0
-            tempmarker.color.g = 1.0
-            tempmarker.color.b = 0.0
-            tempmarker.color.a = 0.5
-            tempmarker.lifetime = rospy.Duration(0.5)
 
             for i in range(len(tstates.drivable_area_timelist[0])):
+                
+                #part 1: boundary section
+                tempmarker = Marker() #jxy: must be put inside since it is python
+                tempmarker.header.frame_id = "map"
+                tempmarker.header.stamp = rospy.Time.now()
+                tempmarker.ns = "zzz/cognition"
+                tempmarker.id = count
+                tempmarker.type = Marker.LINE_STRIP
+                tempmarker.action = Marker.ADD
+                tempmarker.scale.x = 0.20
+                tempmarker.color.a = 0.5
+                tempmarker.lifetime = rospy.Duration(0.5)
+
                 point = tstates.drivable_area_timelist[0][i]
                 p = Point()
                 p.x = point[0]
                 p.y = point[1]
                 p.z = 0 #TODO: the map does not provide z value
                 tempmarker.points.append(p)
-                    
-            self._drivable_area_markerarray.markers.append(tempmarker)
-            count = count + 1
+
+                next_id = i + 1
+                if next_id >= len(tstates.drivable_area_timelist[0]):
+                    next_id = 0
+
+                next_point = tstates.drivable_area_timelist[0][next_id]
+                p = Point()
+                p.x = next_point[0]
+                p.y = next_point[1]
+                p.z = 0 #TODO: the map does not provide z value
+                tempmarker.points.append(p)
+
+                tempmarker.color.r = 1.0
+                tempmarker.color.g = 1.0
+                tempmarker.color.b = 0.0
+
+                if next_point[7] == 2:
+                    tempmarker.color.r = 1.0
+                    tempmarker.color.g = 0.0
+                    tempmarker.color.b = 0.0
+                
+                self._drivable_area_markerarray.markers.append(tempmarker)
+                count = count + 1
+
+                #part 2: boundary section motion status
+                if next_point[7] == 2: # and (abs(next_point[2]) + abs(next_point[3])) > 0.3:
+                    tempmarker = Marker() #jxy: must be put inside since it is python
+                    tempmarker.header.frame_id = "map"
+                    tempmarker.header.stamp = rospy.Time.now()
+                    tempmarker.ns = "zzz/cognition"
+                    tempmarker.id = count
+                    tempmarker.type = Marker.ARROW
+                    tempmarker.action = Marker.ADD
+                    tempmarker.scale.x = 0.4
+                    tempmarker.scale.y = 0.7
+                    tempmarker.scale.z = 0.75
+                    tempmarker.color.r = 0.5
+                    tempmarker.color.g = 0.5
+                    tempmarker.color.b = 1.0
+                    tempmarker.color.a = 0.8
+                    tempmarker.lifetime = rospy.Duration(0.5)
+
+                    startpoint = Point()
+                    endpoint = Point()
+                    startpoint.x = (point[0] + next_point[0]) / 2
+                    startpoint.y = (point[1] + next_point[1]) / 2
+                    startpoint.z = 0
+                    endpoint.x = startpoint.x + next_point[2]
+                    endpoint.y = startpoint.y + next_point[3]
+                    endpoint.z = 0
+                    tempmarker.points.append(startpoint)
+                    tempmarker.points.append(endpoint)
+
+                    self._drivable_area_markerarray.markers.append(tempmarker)
+                    count = count + 1
+
+        if len(self._drivable_area_markerarray.markers) < 100:
+            for i in range(100 - len(self._drivable_area_markerarray.markers)):
+                tempmarker = Marker()
+                tempmarker.header.frame_id = "map"
+                tempmarker.header.stamp = rospy.Time.now()
+                tempmarker.ns = "zzz/cognition"
+                tempmarker.id = count
+                tempmarker.type = Marker.SPHERE
+                tempmarker.action = Marker.ADD
+                tempmarker.scale.x = 0.4
+                tempmarker.scale.y = 0.7
+                tempmarker.scale.z = 0.75
+                tempmarker.color.r = 0.5
+                tempmarker.color.g = 0.5
+                tempmarker.color.b = 1.0
+                tempmarker.color.a = 0.8
+                tempmarker.lifetime = rospy.Duration(0.5)
+
+                self._drivable_area_markerarray.markers.append(tempmarker)
+                count = count + 1
 
         #7. next drivable area
         self._next_drivable_area_markerarray = MarkerArray()

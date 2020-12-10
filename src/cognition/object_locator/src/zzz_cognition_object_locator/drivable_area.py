@@ -228,7 +228,7 @@ def calculate_drivable_areas(tstates, tt):
             for i in range(len(tstates.static_map.next_drivable_area.points)):
 
                 node_point = tstates.static_map.next_drivable_area.points[i]
-                next_key_node_list.append([node_point.x, node_point.y])
+                next_key_node_list.append([node_point.x, node_point.y, 0, 0, 0, 0, 0, 1])
 
             next_key_node_list.reverse()
             joint_point2_index = len(dist_array) - 1 - joint_point2_index
@@ -296,6 +296,16 @@ def calculate_drivable_areas(tstates, tt):
         for i in range(len(key_node_list)):
             node_point = key_node_list[i]
             last_node_point = key_node_list[i-1]
+            flag, vx, vy, flag_n, vx_n, vy_n = 1, 0, 0, 1, 0, 0
+            if not tstates.static_map.in_junction:
+                if node_point[7] == 2:
+                    rospy.loginfo("hahaha!")
+                    flag = 2
+                    vx = node_point[2]
+                    vy = node_point[3]
+                    flag_n = 2
+                    vx_n = node_point[2]
+                    vy_n = node_point[3]
             #point = [node_point.x, node_point.y]
             #shatter the figure
             vertex_dist = math.sqrt(pow((node_point[0] - last_node_point[0]), 2) + pow((node_point[1] - last_node_point[1]), 2))
@@ -307,22 +317,22 @@ def calculate_drivable_areas(tstates, tt):
                     angle_list.append(math.atan2(y - ego_y, x - ego_x))
                     dist_list.append(math.sqrt(pow((x - ego_x), 2) + pow((y - ego_y), 2)))
                     #the velocity of static boundary is 0
-                    vx_list.append(0)
-                    vy_list.append(0)
+                    vx_list.append(vx)
+                    vy_list.append(vy)
                     base_x_list.append(0)
                     base_y_list.append(0)
                     omega_list.append(0)
-                    flag_list.append(1) #static boundary #jxy20201203: warning! FLAG of lane following vehicles should be updated!
+                    flag_list.append(flag) #static boundary #jxy20201203: warning! FLAG of lane following vehicles should be updated!
                     id_list.append(-1) #static boundary, interp points (can be deleted)
             
             angle_list.append(math.atan2(node_point[1] - ego_y, node_point[0] - ego_x))
             dist_list.append(math.sqrt(pow((node_point[0] - ego_x), 2) + pow((node_point[1] - ego_y), 2)))
-            vx_list.append(0)
-            vy_list.append(0)
+            vx_list.append(vx_n)
+            vy_list.append(vy_n)
             base_x_list.append(0)
             base_y_list.append(0)
             omega_list.append(0)
-            flag_list.append(1) #static boundary
+            flag_list.append(flag_n) #static boundary
             id_list.append(-2) #static boundary, nodes (cannot be deleted)
             
     else:
@@ -443,7 +453,13 @@ def calculate_drivable_areas(tstates, tt):
             del base_y_list[j]
             del omega_list[j]
             del flag_list[j]
-            continue #jxy0715: might not be the most reasonable. This sacrifices accuracy of observation.    
+            continue #jxy0715: might not be the most reasonable. This sacrifices accuracy of observation.
+
+        elif id_list[j] == id_list[next_id] and abs(id_list[j] - id_list[j-1]) > 0.5:
+            #the last dynamic point, flag set to static, since the velocity of point i refers to the velocity of the edge between i and i-1
+            flag_list[j] = 1
+            vx_list[j] = 0
+            vy_list[j] = 0
     
     for j in range(len(angle_list)):
         x = ego_x + dist_list[j] * math.cos(angle_list[j])
@@ -459,8 +475,8 @@ def calculate_drivable_areas(tstates, tt):
     
     
     #close the figure
-    if len(temp_drivable_area) > 0:
-        temp_drivable_area.append(temp_drivable_area[0])
+    # if len(temp_drivable_area) > 0:
+    #     temp_drivable_area.append(temp_drivable_area[0])
 
     tstates.drivable_area_timelist.append(temp_drivable_area)
 
@@ -471,7 +487,7 @@ def calculate_drivable_areas(tstates, tt):
 
 def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy, lane_boundaries, outpointlist):
 
-    #set the velocity of the start point to 0, since the velocity of point i refers to the velocity of the edge between i and i+1
+    #set the velocity of the start point to 0, since the velocity of point i refers to the velocity of the edge between i and i-1 (reversed)
     startvx = 0
     startvy = 0
     if starts <= ends:
@@ -502,12 +518,22 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
                 #projection to the longitudinal direction
                 direction = math.atan2(point2.position.y - point1.position.y, point2.position.x - point1.position.x)
 
+                v_value = smallvx * math.cos(direction) + smallvy * math.sin(direction)
+                vx_s = v_value * math.cos(direction)
+                vy_s = v_value * math.sin(direction)
+                flag = 0
+                if v_value != 0:
+                    flag = 2
+                    print "dynamic point small!"
+                else:
+                    flag = 1
+
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (smalls - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (smalls - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy]
+                point = [pointx, pointy, vx_s, vy_s, 0, 0, 0, flag]
                 pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s > smalls and lane_boundaries[j].boundary_point.s < bigs:
-            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y]
+            point = [lane_boundaries[j].boundary_point.position.x, lane_boundaries[j].boundary_point.position.y, 0, 0, 0, 0, 0, 1]
             pointlist.append(point)
         elif lane_boundaries[j].boundary_point.s >= bigs:
             if j == 0:
@@ -520,11 +546,19 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
                 direction = math.atan2(point2.position.y - point1.position.y, point2.position.x - point1.position.x)
 
                 v_value = bigvx * math.cos(direction) + bigvy * math.sin(direction)
+                vx_s = v_value * math.cos(direction)
+                vy_s = v_value * math.sin(direction)
+                flag = 0
+                if v_value != 0:
+                    flag = 2
+                    print "dynamic point big!"
+                else:
+                    flag = 1
                 #the angular velocity in lanes need not be considered, so omega = 0
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
-                point = [pointx, pointy]
+                point = [pointx, pointy, vx_s, vy_s, 0, 0, 0, flag]
                 pointlist.append(point)
 
     if starts <= ends:
@@ -545,17 +579,9 @@ def next_lane_section_points_generation_united(starts, ends, startvx, startvy, e
     if starts <= ends:
         smalls = starts
         bigs = ends
-        smallvx = startvx
-        smallvy = startvy
-        bigvx = endvx
-        bigvy = endvy
     else:
         smalls = ends
         bigs = starts
-        smallvx = endvx
-        smallvy = endvy
-        bigvx = startvx
-        bigvy = startvy
     
     pointlist = []
     for j in range(len(lane_boundaries)):
@@ -586,13 +612,6 @@ def next_lane_section_points_generation_united(starts, ends, startvx, startvy, e
 
                 #projection to the longitudinal direction
                 direction = math.atan2(point2.position.y - point1.position.y, point2.position.x - point1.position.x)
-
-                v_value = bigvx * math.cos(direction) + bigvy * math.sin(direction)
-                if v_value > 0.1:
-                    flag = 2
-                else:
-                    flag = 1
-                #the angular velocity in lanes need not be considered, so omega = 0
 
                 pointx = point1.position.x + (point2.position.x - point1.position.x) * (bigs - point1.s) / (point2.s - point1.s)
                 pointy = point1.position.y + (point2.position.y - point1.position.y) * (bigs - point1.s) / (point2.s - point1.s)
