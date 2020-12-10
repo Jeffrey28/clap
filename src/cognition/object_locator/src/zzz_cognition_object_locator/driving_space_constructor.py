@@ -705,7 +705,7 @@ class DrivingSpaceConstructor:
 
         count = 0
         if len(tstates.drivable_area_timelist[0]) != 0:
-            
+                
             tempmarker = Marker() #jxy: must be put inside since it is python
             tempmarker.header.frame_id = "map"
             tempmarker.header.stamp = rospy.Time.now()
@@ -727,6 +727,7 @@ class DrivingSpaceConstructor:
                 p.y = point[1]
                 p.z = 0 #TODO: the map does not provide z value
                 tempmarker.points.append(p)
+                    
             self._drivable_area_markerarray.markers.append(tempmarker)
             count = count + 1
 
