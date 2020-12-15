@@ -74,6 +74,7 @@ def calculate_drivable_areas(tstates, tt):
     flag_list = []
 
     skip_list = [] #lane following vehicles, only when ego vehicle is in lanes
+    non_skip_following_list = []
 
     if tstates.static_map.in_junction:
 
@@ -194,6 +195,7 @@ def calculate_drivable_areas(tstates, tt):
                     continue
                 if obstacle.lane_dist_s > ego_s and obstacle.lane_dist_s < lane_sections[lane_index_rounded, 1]:
                     if len(tstates.static_map.next_drivable_area.points) >= 3:
+                        non_skip_following_list.append(i)
                         continue
                     lane_sections[lane_index_rounded, 1] = obstacle.lane_dist_s - obstacle.dimension.length_x / 2.0
                     lane_sections[lane_index_rounded, 4] = obstacle.state.twist.twist.linear.x
@@ -298,12 +300,12 @@ def calculate_drivable_areas(tstates, tt):
             last_node_point = key_node_list[i-1]
             flag, vx, vy, flag_n, vx_n, vy_n = 1, 0, 0, 1, 0, 0
             if not tstates.static_map.in_junction:
-                if node_point[7] == 2:
+                if node_point[7] == 3: #jxy: car following vehicle, dynamic 3
                     rospy.loginfo("hahaha!")
-                    flag = 2
+                    flag = 3
                     vx = node_point[2]
                     vy = node_point[3]
-                    flag_n = 2
+                    flag_n = 3
                     vx_n = node_point[2]
                     vy_n = node_point[3]
             #point = [node_point.x, node_point.y]
@@ -363,6 +365,10 @@ def calculate_drivable_areas(tstates, tt):
 
             if i in skip_list:
                 continue
+
+            lane_following_flag = 0
+            if i in non_skip_following_list:
+                lane_following_flag = 1
             
             if dist_to_ego < 35:
                 dist_to_static_boundary, _, _, = dist_from_point_to_closedpolyline2d(obs.state.pose.pose.position.x, \
@@ -373,7 +379,7 @@ def calculate_drivable_areas(tstates, tt):
                 t3 = time.time()
 
                 update_boundary_obstacle(obs, i, ego_x, ego_y, dist_list, angle_list, vx_list, vy_list, base_x_list, \
-                    base_y_list, omega_list, flag_list, id_list, check_list)
+                    base_y_list, omega_list, flag_list, id_list, check_list, lane_following_flag)
 
                 t4 = time.time()
                 rospy.loginfo("single object %d time: %f ms", i, (t4 - t3) * 1000)
@@ -523,8 +529,7 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
                 vy_s = v_value * math.sin(direction)
                 flag = 0
                 if v_value != 0:
-                    flag = 2
-                    print "dynamic point small!"
+                    flag = 3
                 else:
                     flag = 1
 
@@ -550,8 +555,7 @@ def lane_section_points_generation(starts, ends, startvx, startvy, endvx, endvy,
                 vy_s = v_value * math.sin(direction)
                 flag = 0
                 if v_value != 0:
-                    flag = 2
-                    print "dynamic point big!"
+                    flag = 3
                 else:
                     flag = 1
                 #the angular velocity in lanes need not be considered, so omega = 0
@@ -628,7 +632,7 @@ def next_lane_section_points_generation_united(starts, ends, startvx, startvy, e
             j = len(pointlist) - 1 - i
             next_static_area.append(pointlist[j])
 
-def update_boundary_obstacle(obs, i, ego_x, ego_y, dist_list, angle_list, vx_list, vy_list, base_x_list, base_y_list, omega_list, flag_list, id_list, check_list):
+def update_boundary_obstacle(obs, i, ego_x, ego_y, dist_list, angle_list, vx_list, vy_list, base_x_list, base_y_list, omega_list, flag_list, id_list, check_list, lane_following_flag):
     #TODO: find a more robust method
     obs_x = obs.state.pose.pose.position.x
     obs_y = obs.state.pose.pose.position.y
@@ -725,7 +729,7 @@ def update_boundary_obstacle(obs, i, ego_x, ego_y, dist_list, angle_list, vx_lis
                 base_x_list[j] = obs_x
                 base_y_list[j] = obs_y
                 omega_list[j] = omega
-                flag_list[j] = 2 #dynamic boundary
+                flag_list[j] = 2 + lane_following_flag #dynamic boundary
                 id_list[j] = i + id_extra_flag #mark that this point is updated by the ith obstacle
                 check_list[j] = 1
 
@@ -771,5 +775,5 @@ def update_boundary_obstacle(obs, i, ego_x, ego_y, dist_list, angle_list, vx_lis
                 base_x_list[j] = obs_x
                 base_y_list[j] = obs_y
                 omega_list[j] = omega
-                flag_list[j] = 2
+                flag_list[j] = 2 + lane_following_flag
                 id_list[j] = i + id_extra_flag

@@ -61,11 +61,11 @@ class DrivingSpaceNode(object):
             t1 = time.time()
             succss_update = self._driving_space.update_driving_space()
             t2 = time.time()
-            fw = open("/home/carla/ZZZ/record_time_masternew.txt", 'a')   
-            fw.write("driving space: ")
-            fw.write(str((t2 - t1) * 1000)) 
-            fw.write("\n")
-            fw.close()
+            # fw = open("/home/carla/ZZZ/record_time_masternew.txt", 'a')   
+            # fw.write("driving space: ")
+            # fw.write(str((t2 - t1) * 1000)) 
+            # fw.write("\n")
+            # fw.close()
 
             if succss_update:
                 self._driving_space_publisher.publish(self._driving_space.driving_space)
