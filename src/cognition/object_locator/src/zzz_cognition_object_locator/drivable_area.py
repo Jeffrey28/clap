@@ -382,10 +382,9 @@ def calculate_drivable_areas(tstates, tt):
                     base_y_list, omega_list, flag_list, id_list, check_list, lane_following_flag)
 
                 t4 = time.time()
-                rospy.loginfo("single object %d time: %f ms", i, (t4 - t3) * 1000)
 
-                if (t4 - t3) * 1000 > 10:
-                    rospy.loginfo("single object time long, why?")
+                # if (t4 - t3) * 1000 > 10:
+                    # rospy.loginfo("single object time long, why?")
                     # jxy20201130: memory shortage, will numpy array solve this problem?
                     # t5 = time.time()
                     # update_boundary_obstacle(obs, i, ego_x, ego_y, dist_list, angle_list, vx_list, vy_list, base_x_list, \
