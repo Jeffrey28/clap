@@ -345,7 +345,7 @@ def record_vehicle_states(carla_world, delay):
             elif 20.0 < location.x < 40 and 80.0 < location.y < 95.0:
                 v_in_fourth = v_in_fourth + 1
          
-        fw = open("/home/carla/ZZZ/record_vehicle.txt", 'a')   
+        fw = open("/home/icv/ZZZ/record_vehicle.txt", 'a')   
         fw.write(str(num_agents))   
         fw.write(",")   
         fw.write(str(v_in_one))   
@@ -388,7 +388,7 @@ def record_collsion_to_txt(ego_vehicle):
         if_write_collision = False
 
     if if_intersection == True and if_write == False:
-        fw = open("/home/carla/ZZZ/record_collision.txt", 'a')   
+        fw = open("/home/icv/ZZZ/record_collision.txt", 'a')   
         if (-55 < ego_x < -45 and 17 < ego_y < 27) or (25 < ego_x < 35 and 25 < ego_y < 35):
             fw.write("0") # into false intersection
         else:
@@ -406,7 +406,7 @@ def record_collsion_to_txt(ego_vehicle):
 
         if collision_signal:
             # fw = open("/home/carla/ZZZ/zzz/src/driver/simulators/carla/carla_adapter/nodes/record_collision.txt", 'a')   
-            fw = open("/home/carla/ZZZ/record_collision.txt", 'a')   
+            fw = open("/home/icv/ZZZ/record_collision.txt", 'a')   
             fw.write("10") # collision
             fw.write("\n")
             fw.close()   

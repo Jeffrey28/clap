@@ -8,7 +8,7 @@ import time
 from zzz_common.params import parse_private_args
 from zzz_driver_msgs.msg import RigidBodyStateStamped
 from zzz_navigation_msgs.msg import Map
-from zzz_cognition_msgs.msg import DrivingSpace, DynamicBoundaryList
+from zzz_cognition_msgs.msg import DrivingSpace, DynamicBoundaryList, MapState
 from zzz_perception_msgs.msg import DetectionBoxArray, TrackingBoxArray
 from zzz_cognition_object_locator import DrivingSpaceConstructor
 from visualization_msgs.msg import Marker, MarkerArray
@@ -19,6 +19,7 @@ class DrivingSpaceNode(object):
         params = parse_private_args(
             objects_topic = "/zzz/perception/objects_tracked",
             map_input_topic="/zzz/navigation/local_static_map",
+            map_output_topic="local_dynamic_map/map_with_objects",
             pose_topic = "/zzz/navigation/ego_pose",
             traffic_light_topic = "/zzz/perception/traffic_lights",
             driving_space_topic = "driving_space",
@@ -35,11 +36,12 @@ class DrivingSpaceNode(object):
         self._ego_markerarray_publisher = rospy.Publisher("ego_markerarray", MarkerArray, queue_size=1)
 
         self._driving_space_publisher = rospy.Publisher(params.driving_space_topic, DrivingSpace, queue_size=1)
+        self._dynamic_boundary_publisher = rospy.Publisher(params.dynamic_boundary_topic, DynamicBoundaryList, queue_size=1)
+        self._dynamic_map_publisher = rospy.Publisher(params.map_output_topic, MapState, queue_size=1)
+
         self._pose_subscriber = rospy.Subscriber(params.pose_topic, RigidBodyStateStamped, self._driving_space.receive_ego_state)
         self._surrounding_vehicle_subscriber = rospy.Subscriber(params.objects_topic, TrackingBoxArray, self._driving_space.receive_object_list)
         self._static_map_subscriber = rospy.Subscriber(params.map_input_topic, Map, self._driving_space.receive_static_map)
-        self._driving_space_publisher = rospy.Publisher(params.driving_space_topic, DrivingSpace, queue_size=1)
-        self._dynamic_boundary_publisher = rospy.Publisher(params.dynamic_boundary_topic, DynamicBoundaryList, queue_size=1)
         self._traffic_light_subscriber = rospy.Subscriber(params.traffic_light_topic, DetectionBoxArray,
             self._driving_space.receive_traffic_light_detection)
 
@@ -61,7 +63,7 @@ class DrivingSpaceNode(object):
             t1 = time.time()
             succss_update = self._driving_space.update_driving_space()
             t2 = time.time()
-            fw = open("/home/carla/ZZZ/record_time_masternew.txt", 'a')   
+            fw = open("/home/icv/ZZZ/record_time_masternew.txt", 'a')   
             fw.write("0 ")
             fw.write(str((t2 - t1) * 1000)) 
             fw.write("\n")
@@ -70,6 +72,7 @@ class DrivingSpaceNode(object):
             if succss_update:
                 self._driving_space_publisher.publish(self._driving_space.driving_space)
                 self._dynamic_boundary_publisher.publish(self._driving_space.dynamic_boundary_list)
+                self._dynamic_map_publisher.publish(self._driving_space._dynamic_map)
                 self._obstacles_markerarray_publisher.publish(self._driving_space._obstacles_markerarray)
                 self._obstacles_label_markerarray_publisher.publish(self._driving_space._obstacles_label_markerarray)
                 self._lanes_markerarray_publisher.publish(self._driving_space._lanes_markerarray)
