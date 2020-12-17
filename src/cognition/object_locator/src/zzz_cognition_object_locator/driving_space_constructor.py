@@ -15,7 +15,7 @@ from zzz_cognition_msgs.utils import convert_tracking_box, default_msg as cognit
 from zzz_perception_msgs.msg import TrackingBoxArray, DetectionBoxArray, ObjectSignals, DimensionWithCovariance
 from zzz_common.geometry import dist_from_point_to_polyline2d, wrap_angle
 from zzz_common.kinematics import get_frenet_state
-from zzz_cognition_msgs.msg import DrivingSpace, DynamicBoundaryList, DynamicBoundary, DynamicBoundaryPoint
+from zzz_cognition_msgs.msg import DrivingSpace, DynamicBoundary, DynamicBoundaryPoint
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
 from zzz_driver_msgs.utils import get_speed, get_yaw
@@ -131,7 +131,6 @@ class DrivingSpaceConstructor:
         if static_map.in_junction or len(static_map.lanes) == 0:
             rospy.logdebug("Cognition: In junction due to static map report junction location")
             dynamic_map.model = MapState.MODEL_JUNCTION_MAP
-            dynamic_map.jmap.drivable_area = static_map.drivable_area
         else:
             dynamic_map.model = MapState.MODEL_MULTILANE_MAP
             for lane in static_map.lanes:
@@ -175,9 +174,6 @@ class DrivingSpaceConstructor:
         self._dynamic_map = dynamic_map
 
         #jxy1202: will change output at final step
-        self.dynamic_boundary_list = DynamicBoundaryList()
-        self.dynamic_boundary_list.header.frame_id = "map"
-        self.dynamic_boundary_list.header.stamp = rospy.Time.now()
         for tt in range(STEPS):
             dynamic_boundary = DynamicBoundary()
             dynamic_boundary.header.frame_id = "map"
@@ -194,7 +190,7 @@ class DrivingSpaceConstructor:
                 boundary_point.omega = drivable_area_point[6]
                 boundary_point.flag = drivable_area_point[7]
                 dynamic_boundary.boundary.append(boundary_point)
-            self.dynamic_boundary_list.boundary_list.append(dynamic_boundary)
+            dynamic_map.jmap.boundary_list.append(dynamic_boundary)
 
         self.visualization(tstates)
 
@@ -382,6 +378,7 @@ class DrivingSpaceConstructor:
                     front_vehicle.ffstate.s = self._ego_vehicle_distance_to_lane_tail[lane_id] - front_vehicles[vehicle_row, 1]
                     front_vehicle.behavior = self.predict_vehicle_behavior(front_vehicle, tstates)
                     tstates.dynamic_map.mmap.lanes[lane_id].front_vehicles.append(front_vehicle)
+                    break #jxy1217: only keep one, since only one is used in IDM
                 
                 front_vehicle = tstates.dynamic_map.mmap.lanes[lane_id].front_vehicles[0]
                 rospy.logdebug("Lane index: %d, Front vehicle id: %d, behavior: %d, x:%.1f, y:%.1f, d:%.1f", 
@@ -402,6 +399,7 @@ class DrivingSpaceConstructor:
                     rear_vehicle.ffstate.s = rear_vehicles[vehicle_row, 1] - self._ego_vehicle_distance_to_lane_head[lane_id] # negative value
                     rear_vehicle.behavior = self.predict_vehicle_behavior(rear_vehicle, tstates)
                     tstates.dynamic_map.mmap.lanes[lane_id].rear_vehicles.append(rear_vehicle)
+                    break
                 
                 rear_vehicle = tstates.dynamic_map.mmap.lanes[lane_id].rear_vehicles[0]
                 rospy.logdebug("Lane index: %d, Rear vehicle id: %d, behavior: %d, x:%.1f, y:%.1f, d:%.1f", 

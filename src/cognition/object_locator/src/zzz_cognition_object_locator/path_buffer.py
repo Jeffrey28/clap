@@ -131,11 +131,12 @@ class PathBuffer:
         dynamic_map.jmap.reference_path.map_lane.index = -1
 
         # Calculate vehicles on the reference path 
+        # jxy1217: found it unused.
         # TODO: find all vehicles near enough on reference_path
-        if len(dynamic_map.jmap.reference_path.map_lane.central_path_points) > front_vehicle_avoidance_require_thres:
-            front_vehicle = self.get_front_vehicle_on_reference_path(tstates)
-            if front_vehicle is not None:
-                dynamic_map.jmap.reference_path.front_vehicles = [front_vehicle]
+        # if len(dynamic_map.jmap.reference_path.map_lane.central_path_points) > front_vehicle_avoidance_require_thres:
+        #     front_vehicle = self.get_front_vehicle_on_reference_path(tstates)
+        #     if front_vehicle is not None:
+        #         dynamic_map.jmap.reference_path.front_vehicles = [front_vehicle]
 
         # TODO: read or detect speed limit
         dynamic_map.jmap.reference_path.map_lane.speed_limit = 10

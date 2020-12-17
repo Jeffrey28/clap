@@ -91,13 +91,13 @@ class LaneUtility(object):
         if front_vehicle is None:
             d_front = -1
             front_safe = True
-            behavior_front = RoadObstacle.BEHAVIOR_UNKNOWN
+            #behavior_front = RoadObstacle.BEHAVIOR_UNKNOWN
         else:
             front_vehicle_location = np.array([
                 front_vehicle.state.pose.pose.position.x,
                 front_vehicle.state.pose.pose.position.y
             ])
-            behavior_front = front_vehicle.behavior
+            #behavior_front = front_vehicle.behavior
             # TODO: Change to real distance in lane
             d_front = np.linalg.norm(front_vehicle_location - ego_vehicle_location)
             front_v = get_speed(front_vehicle.state)
@@ -107,13 +107,13 @@ class LaneUtility(object):
         if rear_vehicle is None:
             rear_safe = True
             d_rear = -1
-            behavior_rear = RoadObstacle.BEHAVIOR_UNKNOWN
+            #behavior_rear = RoadObstacle.BEHAVIOR_UNKNOWN
         else:
             rear_vehicle_location = np.array([
                 rear_vehicle.state.pose.pose.position.x,
                 rear_vehicle.state.pose.pose.position.y
             ])
-            behavior_rear = rear_vehicle.behavior
+            #behavior_rear = rear_vehicle.behavior
             d_rear = np.linalg.norm(rear_vehicle_location - ego_vehicle_location)
             rear_v = get_speed(rear_vehicle.state)
             if d_rear > max(10 + 3*(rear_v-ego_v), 20):

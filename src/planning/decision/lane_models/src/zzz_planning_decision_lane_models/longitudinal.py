@@ -123,6 +123,10 @@ class IDM(object):
 
 
     def neighbor_vehicle_is_cutting_in(self,neighbor_lane,ego_lane):
+
+        #jxy: TODO: updated by Xu Ying
+        return False
+        
         if len(neighbor_lane.front_vehicles) == 0:
             return False
         

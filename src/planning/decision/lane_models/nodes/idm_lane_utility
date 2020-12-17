@@ -6,7 +6,7 @@ import traceback
 import time
 
 from zzz_common.params import parse_private_args
-from zzz_cognition_msgs.msg import MapState, DynamicBoundaryList
+from zzz_cognition_msgs.msg import MapState
 from zzz_navigation_msgs.msg import Map
 from zzz_planning_decision_lane_models.longitudinal import IDM
 from zzz_planning_decision_lane_models.lateral import LaneUtility
@@ -40,8 +40,6 @@ class DecisionNode(object):
 
         self._static_map_subscriber = rospy.Subscriber(params.static_map_topic, Map, self._decision_instance.receive_static_map)
         self._dynamic_map_subscriber = rospy.Subscriber(params.dynamic_map_topic, MapState, self._decision_instance.receive_dynamic_map)
-        self._dynamic_boundary_subscriber = rospy.Subscriber(params.dynamic_boundary_topic, DynamicBoundaryList, \
-            self._decision_instance.receive_dynamic_boundary)
         self._decision_trajectory_publisher = rospy.Publisher(params.decision_trajectory_topic, DecisionTrajectory, queue_size=1)
         self._rviz_decision_trajectory_publisher = rospy.Publisher(params.RVIZ_decision_trajectory_topic, Path, queue_size=1)
 
