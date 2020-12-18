@@ -62,8 +62,10 @@ class MainDecision(object):
 
             self._initialize_flag = 0 #only initialize in the lanes
 
-            changing_lane_index, desired_speed = self._lateral_model_instance.lateral_decision(dynamic_map)
-            self._last_lane_index = changing_lane_index
+            #changing_lane_index, desired_speed = self._lateral_model_instance.lateral_decision(dynamic_map)
+            changing_lane_index = self._last_lane_index
+            desired_speed = 15.0 / 3.6
+            #TODO: construct several virtual lanes in junction, and put in front and rear vehicles
             
             ego_speed = get_speed(dynamic_map.ego_state)
 
@@ -74,10 +76,6 @@ class MainDecision(object):
 
             if len(static_map.drivable_area.points) < 3:
                 return None
-
-            if self._initialize_flag == 0: #jxy: initialize
-                self._local_trajectory_instance.clean_frenet_lane()
-                self._local_trajectory_instance.build_frenet_lane(dynamic_map, static_map)
 
             #TODO: what if start point is in the junction?
             if self._load_next_road_flag == 0:

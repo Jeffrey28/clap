@@ -425,13 +425,18 @@ class Werling_planner(object):
         
         exit_junction_point = []
         exit_junction_direction = []
+        if static_map is not None:
+            print "next drivable area point num:"
+            print len(static_map.next_drivable_area.points)
+            if len(static_map.next_drivable_area.points) > 3:
+                exit_junction_point, exit_junction_direction = self.calc_exit_point(dynamic_map, static_map)
 
         lane_num = len(dynamic_map.mmap.lanes)
         for lane_idx,lane in enumerate(dynamic_map.mmap.lanes):
             central_path = lane.map_lane.central_path_points
             extend_centrol_path = self.extend_path(central_path)
-            #extend_path2 = self.extend_junction_path(extend_centrol_path, exit_junction_point, exit_junction_direction)
-            self.lanes.append(Werling(extend_centrol_path,lane_idx,lane_num))
+            extend_path2 = self.extend_junction_path(extend_centrol_path, exit_junction_point, exit_junction_direction)
+            self.lanes.append(Werling(extend_path2,lane_idx,lane_num))
 
     def prolong_frenet_lane(self, dynamic_map, static_map):
         #has removed useless lanes, only left 1 in the junction

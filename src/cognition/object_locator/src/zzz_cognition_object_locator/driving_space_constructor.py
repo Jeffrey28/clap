@@ -8,7 +8,7 @@ import copy
 import time
 
 from zzz_driver_msgs.msg import RigidBodyStateStamped
-from zzz_navigation_msgs.msg import Map, Lane
+from zzz_navigation_msgs.msg import Map, Lane, LanePoint
 from zzz_navigation_msgs.utils import get_lane_array, default_msg as navigation_default
 from zzz_cognition_msgs.msg import MapState, LaneState, RoadObstacle
 from zzz_cognition_msgs.utils import convert_tracking_box, default_msg as cognition_default
@@ -45,6 +45,8 @@ class DrivingSpaceConstructor:
         self._obstacles_markerarray = None
         self._lanes_boundary_markerarray = None
         self._dynamic_map = None
+
+        self._lanes_memory = []
         
         self._lane_dist_thres = lane_dist_thres
 
@@ -120,6 +122,30 @@ class DrivingSpaceConstructor:
 
         t3 = time.time()
 
+        #jxy20201218: add virtual lanes in the junction, move the cohering execution here (from lane decision)\
+        if len(static_map.lanes) != 0 and len(static_map.next_lanes) != 0:
+            # in lanes, prolong with the virtual lanes in the junction
+            # TODO: consider when the numbers do not equal
+            for i in range(min(len(static_map.lanes), len(static_map.next_lanes))):
+                point_x = static_map.next_lanes[i].central_path_points[0].position.x
+                point_y = static_map.next_lanes[i].central_path_points[0].position.y
+                next_point_x = static_map.next_lanes[i].central_path_points[1].position.x
+                next_point_y = static_map.next_lanes[i].central_path_points[1].position.y
+                exit_junction_point = [point_x, point_y]
+                exit_junction_direction = [next_point_x - point_x, next_point_y - point_y]
+                original_length = len(static_map.lanes[i].central_path_points)
+                self.extend_junction_path(static_map.lanes[i].central_path_points, \
+                    exit_junction_point, exit_junction_direction)
+                rospy.loginfo("extension successful, original length: %d, extended length: %d", \
+                    original_length, len(static_map.lanes[i].central_path_points))
+
+            self._lanes_memory = static_map.lanes
+
+        if len(static_map.lanes) == 0: #in junction, prolong with next lanes
+            static_map.lanes = self._lanes_memory #jxy: check whether it will change as python
+            for i in range(len(static_map.lanes)): #should be as many as next lanes
+                static_map.lanes[i].extend(static_map.next_lanes[i])
+
         #jxy1216: merge obstacle locator inside
         dynamic_map = tstates.dynamic_map # for easier access
 
@@ -128,11 +154,13 @@ class DrivingSpaceConstructor:
         dynamic_map.header.stamp = rospy.Time.now()
         dynamic_map.ego_state = tstates.ego_vehicle_state.state
 
-        if static_map.in_junction or len(static_map.lanes) == 0:
+        if static_map.in_junction:
             rospy.logdebug("Cognition: In junction due to static map report junction location")
             dynamic_map.model = MapState.MODEL_JUNCTION_MAP
         else:
             dynamic_map.model = MapState.MODEL_MULTILANE_MAP
+
+        if len(static_map.lanes) != 0: #jxy20201218: in junction model, the virtual lanes are still considered.
             for lane in static_map.lanes:
                 dlane = cognition_default(LaneState)
                 dlane.map_lane = lane
@@ -205,6 +233,41 @@ class DrivingSpaceConstructor:
         rospy.logdebug("Updated driving space")
 
         return True
+
+    # ========= For virtual lane =========
+
+    def extend_junction_path(self, path, exit_junction_point, exit_junction_direction):
+
+        #TODO: consider strange junctions, or U turn.
+
+        if len(exit_junction_point) == 0:
+            return path
+
+        x1 = path[-1].position.x
+        y1 = path[-1].position.y
+        x2 = exit_junction_point[0]
+        y2 = exit_junction_point[1]
+        dx1 = path[-1].position.x - path[-2].position.x
+        dy1 = path[-1].position.y - path[-2].position.y
+        dx2 = exit_junction_direction[0]
+        dy2 = exit_junction_direction[1]
+
+        #change coordinate, plan a 3rd polyline
+        l = math.sqrt(math.pow((x1 - x2), 2) + math.pow((y1 - y2), 2))
+        m = (dx1 * (x2 - x1) + dy1 * (y2 - y1)) / l
+        n = (dx2 * (x2 - x1) + dy2 * (y2 - y1)) / l
+        tt1 = math.sqrt(((dx1 * dx1 + dy1 * dy1) / (m * m)) - 1)
+        tt2 = math.sqrt(((dx2 * dx2 + dy2 * dy2) / (n * n)) - 1)
+
+        for i in range(11):
+            u = l - l / 10 * i
+            v = -(u - l) * u * ((tt1 - tt2) / (l * l) * u + tt2 / l)
+            x = ((x1 - x2) * u + (y2 - y1) * v) / l + x2
+            y = ((y1 - y2) * u + (x1 - x2) * v) / l + y2
+            point = LanePoint()
+            point.position.x = x
+            point.position.y = y
+            path.append(point)
 
     # ========= For in lane =========
 
