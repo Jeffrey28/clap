@@ -169,7 +169,7 @@ class LocalMap(object):
                 lane_tail_point = closestLane.getShape()[-1]
                 dist_to_lane_tail = math.sqrt(math.pow((map_x - lane_tail_point[0]), 2) + math.pow((map_y - lane_tail_point[1]), 2))
                 if dist_to_lane_tail < perception_range_demand:
-                    rospy.logdebug("We are near the junction, load the junction")
+                    rospy.logdebug("We are near the junction, load the junction and the next lanes")
                     if dist_to_lane_tail < lane_end_dist_thres:
                         # cognition demand, this should be regarded as vehicle in junction
                         if self._in_section_flag == 0:
@@ -187,7 +187,10 @@ class LocalMap(object):
             if self._in_section_flag != 0:
                 #just enter the section
                 self._in_section_flag = 1
-                return 2
+                if self._current_edge_id is None:
+                    return 4
+                else:
+                    return 0 #jxy20201218: no need to update, junction and next lanes are loaded in the road
         return 0
 
     def init_static_map(self):
@@ -218,10 +221,9 @@ class LocalMap(object):
             self.update_lane_list()
             self.update_target_lane()
             self.update_next_junction()
-        if update_mode == 2:
-            self.update_junction()
-            self.update_next_lanes()
+            self.update_next_lanes() #jxy20201218: for virtual lane generation in the next junction
         if update_mode == 4:
+            self.update_next_lanes()
             self.update_junction()
 
         if not self.static_local_map.in_junction:
@@ -229,12 +231,12 @@ class LocalMap(object):
 
         end = time.time()
 
-        rospy.logdebug("Updated static map info: update mode = %d, lane_number = %d, in_junction = %d, current_edge_id = %s, \
+        rospy.loginfo("Updated static map info: update mode = %d, lane_number = %d, in_junction = %d, current_edge_id = %s, \
             exit_lane_index = %s, time consume = %f, update_lane_list time = %f",
             update_mode, len(self.static_local_map.lanes), int(self.static_local_map.in_junction),
             self._current_edge_id, self.static_local_map.exit_lane_index[0], 1000*(end-start), 1000*(middle-start))
 
-    def update_next_lanes(self, step_length = 20):
+    def update_next_lanes(self, step_length = 15):
 
         map_x, map_y = self.convert_to_map_XY(self._ego_vehicle_x, self._ego_vehicle_y)
         rospy.logdebug("Enter junction, see the next road section")
@@ -256,6 +258,9 @@ class LocalMap(object):
                     elif last_edge is None or last_edge != current_edge.getID():
                         #jxy: next map buffer should be reinitialized and updated
                         self._next_edge_id = current_edge.getID()
+
+                        rospy.loginfo("update next lanes: next edge id: %s", self._next_edge_id)
+                        rospy.loginfo("last edge: %s", last_edge)
 
                         self._next_map_buffer.lanes = []
 

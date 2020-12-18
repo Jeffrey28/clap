@@ -78,11 +78,11 @@ class PathBuffer:
         tstates = edict()
         # clone dynamic_map
         with self._static_map_lock:
-            tstates.dynamic_map = copy.deepcopy(self._static_map_buffer or default_msg(MapState)) 
+            tstates.dynamic_map = self._static_map_buffer or default_msg(MapState)
 
         # clone ego state
         with self._ego_vehicle_state_lock:
-            tstates.ego_state = copy.deepcopy(self._ego_vehicle_state_buffer.state)
+            tstates.ego_state = self._ego_vehicle_state_buffer.state
         
         dynamic_map = tstates.dynamic_map # for easy access
         ego_state = tstates.ego_state # for easy access
