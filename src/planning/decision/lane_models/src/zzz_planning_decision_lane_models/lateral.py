@@ -46,6 +46,8 @@ class LaneUtility(object):
 
     def lane_utility(self, lane_index):
 
+        #TODO: to be modified by Xu Ying
+
         ego_lane_index = int(round(self.dynamic_map.mmap.ego_lane_index))
 
         if not self.lane_change_safe(ego_lane_index, lane_index):
@@ -54,9 +56,12 @@ class LaneUtility(object):
         available_speed = self.longitudinal_model_instance.longitudinal_speed(lane_index)
         rospy.loginfo("available speed at lane %d: %f\n\n\n\n", lane_index, available_speed)
         exit_lanes = np.array(self.dynamic_map.mmap.exit_lane_index)
-        mandatory_lanes_num = min(abs(exit_lanes - lane_index))
-        distance_to_end = self.dynamic_map.mmap.distance_to_junction
-        utility = available_speed*1.5 + 1/(mandatory_lanes_num+1)*max(0, (200-distance_to_end))*0.1
+        if len(exit_lanes) != 0:
+            mandatory_lanes_num = min(abs(exit_lanes - lane_index))
+            distance_to_end = self.dynamic_map.mmap.distance_to_junction
+            utility = available_speed*1.5 + 1/(mandatory_lanes_num+1)*max(0, (200-distance_to_end))*0.1
+        else:
+            utility = available_speed*1.5
 
         if ego_lane_index == lane_index:
             utility += 0.5

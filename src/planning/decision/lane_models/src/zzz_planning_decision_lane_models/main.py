@@ -29,7 +29,8 @@ class MainDecision(object):
         self._load_next_junction_flag = 0
         self._load_next_road_flag = 0
         self._last_lane_index = -1
-        self._initialize_flag = 0
+        self._lane_initialize_flag = 0
+        self._junction_initialize_flag = 0
 
     def receive_dynamic_map(self, dynamic_map):
         assert type(dynamic_map) == MapState
@@ -60,7 +61,12 @@ class MainDecision(object):
 
         if dynamic_map.model == dynamic_map.MODEL_JUNCTION_MAP: #jxy: enter junction, ready to enter another road
 
-            self._initialize_flag = 0 #only initialize in the lanes
+            self._lane_initialize_flag = 0 #only initialize in the lanes
+
+            if self._junction_initialize_flag == 0: #jxy: initialize
+                self._local_trajectory_instance.clean_frenet_lane()
+                self._local_trajectory_instance.build_frenet_lane(dynamic_map, static_map)
+                self._junction_initialize_flag = 1
 
             changing_lane_index, desired_speed = self._lateral_model_instance.lateral_decision(dynamic_map)
             self._last_lane_index = changing_lane_index
@@ -74,16 +80,6 @@ class MainDecision(object):
 
             if len(static_map.drivable_area.points) < 3:
                 return None
-
-            if self._initialize_flag == 0: #jxy: initialize
-                self._local_trajectory_instance.clean_frenet_lane()
-                self._local_trajectory_instance.build_frenet_lane(dynamic_map, static_map)
-
-            #TODO: what if start point is in the junction?
-            if self._load_next_road_flag == 0:
-                self._local_trajectory_instance.remove_useless_lane(changing_lane_index) #only one remains
-                self._local_trajectory_instance.prolong_frenet_lane(dynamic_map, static_map)
-                self._load_next_road_flag = 1
             
             trajectory, local_desired_speed = self._local_trajectory_instance.get_trajectory(dynamic_map, dynamic_boundary, 0, desired_speed, 0)
             #TODO: consider next lanes: which to enter?
@@ -95,36 +91,23 @@ class MainDecision(object):
 
             return msg
 
-            '''
-            if dynamic_map.jmap.distance_to_lanes < close_to_lane and self._cleared_buff_flag == 1:
-                print "built frenet lane in the junction"
-                self._local_trajectory_instance.build_frenet_lane(dynamic_map, static_map)
-                return None
-            else:
-                self._local_trajectory_instance.clean_frenet_lane()
-                self._cleared_buff_flag = 1
-                self._load_next_junction_flag = 0
-                return None
-            '''
-
         else:
 
-            if self._initialize_flag == 0: #jxy: initialize
+            self._junction_initialize_flag = 0
+
+            if self._lane_initialize_flag == 0: #jxy: initialize
                 self._local_trajectory_instance.clean_frenet_lane()
                 self._local_trajectory_instance.build_frenet_lane(dynamic_map, static_map)
                 self._load_next_junction_flag = 0
-                print "built frenet lane"
-                self._initialize_flag = 1
-                return None
-            
-            if static_map is not None and self._load_next_junction_flag == 0:
+                print "initialize frenet lane"
+                self._lane_initialize_flag = 1
+                #return None
+            elif static_map is not None and self._load_next_junction_flag == 0:
                 if len(static_map.next_drivable_area.points) > 3: #jxy: last is sticking point, equal to point 0, thus requiring 4 points
                     print "next junction loaded"
                     self._local_trajectory_instance.clean_frenet_lane() #TODO: modify the Werling planner by prolonging the path rather than clean it
                     self._local_trajectory_instance.build_frenet_lane(dynamic_map, static_map)
                     self._load_next_junction_flag = 1
-
-            self._load_next_road_flag = 0
 
             changing_lane_index, desired_speed = self._lateral_model_instance.lateral_decision(dynamic_map)
             self._last_lane_index = changing_lane_index
@@ -133,8 +116,10 @@ class MainDecision(object):
 
             rospy.logdebug("Planning (lanes): target_lane = %d, target_speed = %f km/h, current_speed: %f km/h", changing_lane_index, desired_speed*3.6, ego_speed*3.6)
             
-            trajectory, local_desired_speed = self._local_trajectory_instance.get_trajectory(dynamic_map, dynamic_boundary, changing_lane_index, desired_speed, 1)
+            if static_map is None:
+                return None
 
+            trajectory, local_desired_speed = self._local_trajectory_instance.get_trajectory(dynamic_map, dynamic_boundary, changing_lane_index, desired_speed, 1)
 
             msg = DecisionTrajectory()
             msg.trajectory = self.convert_ndarray_to_pathmsg(trajectory) # TODO: move to library

@@ -422,9 +422,6 @@ class Werling_planner(object):
     def build_frenet_lane(self, dynamic_map, static_map):
         if len(self.lanes) > 0:
             return
-        
-        exit_junction_point = []
-        exit_junction_direction = []
 
         lane_num = len(dynamic_map.mmap.lanes)
         for lane_idx,lane in enumerate(dynamic_map.mmap.lanes):
@@ -432,13 +429,6 @@ class Werling_planner(object):
             extend_centrol_path = self.extend_path(central_path)
             #extend_path2 = self.extend_junction_path(extend_centrol_path, exit_junction_point, exit_junction_direction)
             self.lanes.append(Werling(extend_centrol_path,lane_idx,lane_num))
-
-    def prolong_frenet_lane(self, dynamic_map, static_map):
-        #has removed useless lanes, only left 1 in the junction
-        global_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
-        exit_index = self.calc_exit_point_junction(dynamic_map, static_map)
-        next_global_path = global_path[(exit_index+1):] #if +1 is outside, return []
-        self.lanes[0].prolong_frenet_path(next_global_path)
 
     def calc_exit_point(self, dynamic_map, static_map):
         global_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
@@ -478,47 +468,9 @@ class Werling_planner(object):
 
         return exit_point, exit_point_direction
 
-    def calc_exit_point_junction(self, dynamic_map, static_map):
-        global_path = dynamic_map.jmap.reference_path.map_lane.central_path_points
-        junction_boundary = []
-        
-        for i in range(len(static_map.drivable_area.points)):
-            node_point = static_map.drivable_area.points[i]
-            junction_boundary.append([node_point.x, node_point.y])
-
-        junction_boundary_array = np.array(junction_boundary)
-
-        inside_flag = 0
-        exit_point_index = 0
-
-        for i in range(len(global_path)):
-            point = global_path[i]
-            point_x = point.position.x
-            point_y = point.position.y
-            dist_to_junction_boundary, _, _, = dist_from_point_to_closedpolyline2d(point_x, point_y, junction_boundary_array)
-
-            if dist_to_junction_boundary > 0 and inside_flag != 1:
-                inside_flag = 1
-            if dist_to_junction_boundary <= 0 and inside_flag == 1:
-                rospy.loginfo("exit current junction!")
-                rospy.loginfo("point position: %f, %f", point_x, point_y)
-                exit_point_index = i
-                break
-
-        return exit_point_index
-
-
     def clean_frenet_lane(self):
         self.lanes = []
         self.last_target_lane_index = -1
-
-    def remove_useless_lane(self, changing_lane_index):
-        if len(self.lanes) == 0:
-            return
-
-        temp_lane = self.lanes[int(changing_lane_index)]
-        self.lanes = []
-        self.lanes.append(temp_lane)
 
     def get_trajectory(self, dynamic_map, dynamic_boundary, target_lane_index, desired_speed, in_lanes_flag):
         # ego_x = dynamic_map.ego_state.pose.pose.position.x
@@ -553,41 +505,6 @@ class Werling_planner(object):
             point.position.x = path[0].position.x - dx / dlen * 0.5
             point.position.y = path[0].position.y - dy / dlen * 0.5
             path.insert(0, point)
-
-        return path
-
-    def extend_junction_path(self, path, exit_junction_point, exit_junction_direction):
-
-        #TODO: consider strange junctions, or U turn.
-
-        if len(exit_junction_point) == 0:
-            return path
-
-        x1 = path[-1].position.x
-        y1 = path[-1].position.y
-        x2 = exit_junction_point[0]
-        y2 = exit_junction_point[1]
-        dx1 = path[-1].position.x - path[-2].position.x
-        dy1 = path[-1].position.y - path[-2].position.y
-        dx2 = exit_junction_direction[0]
-        dy2 = exit_junction_direction[1]
-
-        #change coordinate, plan a 3rd polyline
-        l = math.sqrt(math.pow((x1 - x2), 2) + math.pow((y1 - y2), 2))
-        m = (dx1 * (x2 - x1) + dy1 * (y2 - y1)) / l
-        n = (dx2 * (x2 - x1) + dy2 * (y2 - y1)) / l
-        tt1 = math.sqrt(((dx1 * dx1 + dy1 * dy1) / (m * m)) - 1)
-        tt2 = math.sqrt(((dx2 * dx2 + dy2 * dy2) / (n * n)) - 1)
-
-        for i in range(11):
-            u = l - l / 10 * i
-            v = -(u - l) * u * ((tt1 - tt2) / (l * l) * u + tt2 / l)
-            x = ((x1 - x2) * u + (y2 - y1) * v) / l + x2
-            y = ((y1 - y2) * u + (x1 - x2) * v) / l + y2
-            point = LanePoint()
-            point.position.x = x
-            point.position.y = y
-            path.append(point)
 
         return path
 
