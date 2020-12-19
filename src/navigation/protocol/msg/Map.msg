@@ -14,7 +14,9 @@ int8[] exit_lane_index
 
 # Lanes if it's in a structured road, should be sorted by ascending index
 # The index is starting from right most lane, i.e. the right most lane is indexed as 0
+# Virtual_lanes are extended lanes in the junction, alternative to provide in the static map
 Lane[] lanes
+Lane[] virtual_lanes
 
 # Road area if in junction
 geometry_msgs/Polygon drivable_area

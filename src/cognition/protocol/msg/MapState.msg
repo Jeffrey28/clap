@@ -19,3 +19,5 @@ uint8 MODEL_MULTILANE_MAP = 1
 # Map State Instances
 JunctionMapState jmap
 MultiLaneMapState mmap
+
+float32 status_flag

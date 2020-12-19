@@ -32,6 +32,8 @@ class DrivingSpaceConstructor:
         self._static_map_lock = Lock()
         self._static_map_buffer = None
 
+        self._static_map_updated_flag = 0
+
         self._ego_vehicle_state_lock = Lock()
         self._ego_vehicle_state_buffer = None
 
@@ -63,6 +65,7 @@ class DrivingSpaceConstructor:
         assert type(static_map) == Map
         with self._static_map_lock:
             self._static_map_buffer = static_map
+            self._static_map_updated_flag = 1
             rospy.loginfo("Updated Local Static Map: lanes_num = %d, in_junction = %d, exit_lane_index = %d",
                 len(static_map.lanes), int(static_map.in_junction), static_map.exit_lane_index[0])
 
@@ -122,29 +125,35 @@ class DrivingSpaceConstructor:
 
         t3 = time.time()
 
-        #jxy20201218: add virtual lanes in the junction, move the cohering execution here (from lane decision)\
-        if len(static_map.lanes) != 0 and len(static_map.next_lanes) != 0:
-            # in lanes, prolong with the virtual lanes in the junction
-            # TODO: consider when the numbers do not equal
-            for i in range(min(len(static_map.lanes), len(static_map.next_lanes))):
-                point_x = static_map.next_lanes[i].central_path_points[0].position.x
-                point_y = static_map.next_lanes[i].central_path_points[0].position.y
-                next_point_x = static_map.next_lanes[i].central_path_points[1].position.x
-                next_point_y = static_map.next_lanes[i].central_path_points[1].position.y
-                exit_junction_point = [point_x, point_y]
-                exit_junction_direction = [next_point_x - point_x, next_point_y - point_y]
-                original_length = len(static_map.lanes[i].central_path_points)
-                self.extend_junction_path(static_map.lanes[i].central_path_points, \
-                    exit_junction_point, exit_junction_direction)
-                rospy.loginfo("extension successful, original length: %d, extended length: %d", \
-                    original_length, len(static_map.lanes[i].central_path_points))
+        #jxy20201218: add virtual lanes in the junction, move the cohering execution here (from lane decision)
+        status_flag = 0
+        if self._static_map_updated_flag == 1:
+            self._static_map_updated_flag = 0 #only prolong once when received new static map
+            if len(static_map.virtual_lanes) != 0 and len(static_map.next_lanes) != 0:
+                # in lanes, prolong with the virtual lanes in the junction
+                # TODO: consider when the numbers do not equal
+                for i in range(min(len(static_map.virtual_lanes), len(static_map.next_lanes))):
+                    if len(static_map.next_drivable_area.points) > 3:
+                        point_x = static_map.next_lanes[i].central_path_points[0].position.x
+                        point_y = static_map.next_lanes[i].central_path_points[0].position.y
+                        next_point_x = static_map.next_lanes[i].central_path_points[1].position.x
+                        next_point_y = static_map.next_lanes[i].central_path_points[1].position.y
+                        exit_junction_point = [point_x, point_y]
+                        exit_junction_direction = [next_point_x - point_x, next_point_y - point_y]
+                        original_length = len(static_map.virtual_lanes[i].central_path_points)
+                        self.extend_junction_path(tstates, i, static_map.lanes[i].central_path_points, \
+                            exit_junction_point, exit_junction_direction)
+                        status_flag = 0.5 #loaded next junction
+                        rospy.loginfo("extension successful, original length: %d, extended length: %d", \
+                            original_length, len(static_map.virtual_lanes[i].central_path_points))
 
-            self._lanes_memory = static_map.lanes
+                self._lanes_memory = static_map.virtual_lanes
 
-        if len(static_map.lanes) == 0: #in junction, prolong with next lanes
-            static_map.lanes = self._lanes_memory #jxy: check whether it will change as python
-            for i in range(len(static_map.lanes)): #should be as many as next lanes
-                static_map.lanes[i].extend(static_map.next_lanes[i])
+            if len(static_map.lanes) == 0: #in junction, prolong with next lanes
+                static_map.virtual_lanes = self._lanes_memory #jxy: check whether it will change as python
+                for i in range(len(static_map.virtual_lanes)): #should be as many as next lanes
+                    static_map.virtual_lanes[i].central_path_points.extend(static_map.next_lanes[i].central_path_points)
+        
 
         #jxy1216: merge obstacle locator inside
         dynamic_map = tstates.dynamic_map # for easier access
@@ -153,19 +162,22 @@ class DrivingSpaceConstructor:
         dynamic_map.header.frame_id = "map"
         dynamic_map.header.stamp = rospy.Time.now()
         dynamic_map.ego_state = tstates.ego_vehicle_state.state
-
+        
         if static_map.in_junction:
             rospy.logdebug("Cognition: In junction due to static map report junction location")
             dynamic_map.model = MapState.MODEL_JUNCTION_MAP
+            status_flag = 1
         else:
             dynamic_map.model = MapState.MODEL_MULTILANE_MAP
 
-        if len(static_map.lanes) != 0: #jxy20201218: in junction model, the virtual lanes are still considered.
-            for lane in static_map.lanes:
+        if len(static_map.virtual_lanes) != 0: #jxy20201218: in junction model, the virtual lanes are still considered.
+            for lane in static_map.virtual_lanes:
                 dlane = cognition_default(LaneState)
                 dlane.map_lane = lane
                 dynamic_map.mmap.lanes.append(dlane)
             dynamic_map.mmap.exit_lane_index = copy.deepcopy(static_map.exit_lane_index)
+
+        dynamic_map.status_flag = status_flag
 
         #tstates.dynamic_map.jmap.obstacles = tstates.surrounding_object_list #no longer required
 
@@ -176,7 +188,7 @@ class DrivingSpaceConstructor:
             for lane in tstates.static_map.lanes:
                 self._driving_space.lanes.append(lane)
             #jxy: why is target lane in static map?
-            self.locate_ego_vehicle_in_lanes(tstates)
+            self.locate_ego_vehicle_in_lanes(tstates) #TODO: consider ego_s and front/rear vehicle in virtual lanes!!
             self.locate_surrounding_objects_in_lanes(tstates) # TODO: here lies too much repeated calculation, change it and lateral decision
             for i in range(STEPS):
                 self.locate_obstacle_in_lanes(tstates, i)
@@ -193,11 +205,6 @@ class DrivingSpaceConstructor:
         #jxy1202: will change output at final step
         #TODO: remove driving space and merge dynamic boundary into dynamic map, and optimize dynamic map (lane-obs-lane structure)
         #TODO: prolonging the lanes: move here (less urgent)
-        self._driving_space.header.frame_id = "map"
-        self._driving_space.header.stamp = rospy.Time.now()
-        self._driving_space.ego_state = tstates.ego_vehicle_state.state
-        self._driving_space.obstacles = tstates.surrounding_object_list
-        rospy.logdebug("len(self._static_map.lanes): %d", len(tstates.static_map.lanes))
 
         self._dynamic_map = dynamic_map
 
@@ -236,7 +243,7 @@ class DrivingSpaceConstructor:
 
     # ========= For virtual lane =========
 
-    def extend_junction_path(self, path, exit_junction_point, exit_junction_direction):
+    def extend_junction_path(self, tstates, extension_index, path, exit_junction_point, exit_junction_direction):
 
         #TODO: consider strange junctions, or U turn.
 
@@ -251,13 +258,27 @@ class DrivingSpaceConstructor:
         dy1 = path[-1].position.y - path[-2].position.y
         dx2 = exit_junction_direction[0]
         dy2 = exit_junction_direction[1]
+        
+        print "params:"
+        print x1
+        print y1
+        print x2
+        print y2
+        print dx1
+        print dy1
+        print dx2
+        print dy2
 
         #change coordinate, plan a 3rd polyline
         l = math.sqrt(math.pow((x1 - x2), 2) + math.pow((y1 - y2), 2))
+        if l == 0:
+            return
         m = (dx1 * (x2 - x1) + dy1 * (y2 - y1)) / l
         n = (dx2 * (x2 - x1) + dy2 * (y2 - y1)) / l
         tt1 = math.sqrt(((dx1 * dx1 + dy1 * dy1) / (m * m)) - 1)
         tt2 = math.sqrt(((dx2 * dx2 + dy2 * dy2) / (n * n)) - 1)
+
+        extended_path = tstates.static_map.virtual_lanes[extension_index].central_path_points
 
         for i in range(11):
             u = l - l / 10 * i
@@ -267,7 +288,7 @@ class DrivingSpaceConstructor:
             point = LanePoint()
             point.position.x = x
             point.position.y = y
-            path.append(point)
+            extended_path.append(point)
 
     # ========= For in lane =========
 
@@ -400,8 +421,8 @@ class DrivingSpaceConstructor:
                 obj.lane_index = -1
 
     def locate_surrounding_objects_in_lanes(self, tstates, lane_dist_thres=3):
-        lane_front_vehicle_list = [[] for _ in tstates.static_map.lanes]
-        lane_rear_vehicle_list = [[] for _ in tstates.static_map.lanes]
+        lane_front_vehicle_list = [[] for _ in tstates.static_map.virtual_lanes]
+        lane_rear_vehicle_list = [[] for _ in tstates.static_map.virtual_lanes]
 
         # TODO: separate vehicle and other objects?
         if tstates.surrounding_object_list is not None:
@@ -424,7 +445,7 @@ class DrivingSpaceConstructor:
                     lane_front_vehicle_list[closest_lane].append((vehicle_idx, dist_list[closest_lane, 4]))
         
         # Put the vehicles onto lanes
-        for lane_id in range(len(tstates.static_map.lanes)):
+        for lane_id in range(len(tstates.static_map.virtual_lanes)):
             front_vehicles = np.array(lane_front_vehicle_list[lane_id])
             rear_vehicles = np.array(lane_rear_vehicle_list[lane_id])
 
@@ -491,7 +512,7 @@ class DrivingSpaceConstructor:
         if ego_lane_index < 0 or self._ego_vehicle_distance_to_lane_tail[ego_lane_index_rounded] <= lane_end_dist_thres:
             # Drive into junction, wait until next map
             rospy.logdebug("Cognition: Ego vehicle close to intersection, ego_lane_index = %f, dist_to_lane_tail = %f", ego_lane_index, self._ego_vehicle_distance_to_lane_tail[int(ego_lane_index)])
-            tstates.dynamic_map.model = MapState.MODEL_JUNCTION_MAP
+            #tstates.dynamic_map.model = MapState.MODEL_JUNCTION_MAP
             # TODO: Calculate frenet coordinate here or in put_buffer?
             return
         else:
@@ -587,14 +608,14 @@ class DrivingSpaceConstructor:
     def visualization(self, tstates):
 
         #visualization
-        #1. lanes
+        #1. lanes #jxy20201219: virtual lanes
         self._lanes_markerarray = MarkerArray()
 
         count = 0
-        if not (tstates.static_map.in_junction):
+        if len(tstates.static_map.virtual_lanes) != 0:
             biggest_id = 0 #TODO: better way to find the smallest id
             
-            for lane in tstates.static_map.lanes:
+            for lane in tstates.static_map.virtual_lanes:
                 if lane.index > biggest_id:
                     biggest_id = lane.index
                 tempmarker = Marker() #jxy: must be put inside since it is python

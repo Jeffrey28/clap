@@ -229,6 +229,8 @@ class LocalMap(object):
         if not self.static_local_map.in_junction:
             self.calibrate_lane_index() # make the righest lane index 0
 
+        self.static_local_map.virtual_lanes = self.static_local_map.lanes
+
         end = time.time()
 
         rospy.loginfo("Updated static map info: update mode = %d, lane_number = %d, in_junction = %d, current_edge_id = %s, \

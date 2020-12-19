@@ -132,7 +132,7 @@ def calculate_drivable_areas(tstates, tt):
 
         key_node_list = []
 
-        if len(next_static_area) > 0:    
+        if len(next_static_area) > 0:
             joint_point = next_static_area[0]
             joint_point_x = joint_point[0]
             joint_point_y = joint_point[1]
@@ -339,6 +339,7 @@ def calculate_drivable_areas(tstates, tt):
             
     else:
         tstates.drivable_area_timelist.append([])
+        rospy.loginfo("Dynamic boundary contruction fail!")
         return
 
     #step 3. consider the moving obstacles
@@ -486,7 +487,7 @@ def calculate_drivable_areas(tstates, tt):
     tstates.drivable_area_timelist.append(temp_drivable_area)
 
     t2 = time.time()
-    rospy.loginfo("multi time step object consideration time: %f ms", (t2 - t1) * 1000)
+    #rospy.loginfo("multi time step object consideration time: %f ms", (t2 - t1) * 1000)
 
     #rospy.loginfo("drivable_area constructed with length %d", len(tstates.drivable_area))
 
