@@ -66,6 +66,7 @@ class MainDecision(object):
             if self._junction_initialize_flag == 0: #jxy: initialize
                 self._local_trajectory_instance.clean_frenet_lane()
                 self._local_trajectory_instance.build_frenet_lane(dynamic_map, static_map)
+                print "reached junction"
                 self._junction_initialize_flag = 1
 
             changing_lane_index, desired_speed = self._lateral_model_instance.lateral_decision(dynamic_map)

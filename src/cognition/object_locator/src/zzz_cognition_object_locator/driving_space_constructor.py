@@ -131,7 +131,7 @@ class DrivingSpaceConstructor:
             self._static_map_updated_flag = 0 #only prolong once when received new static map
             if len(static_map.virtual_lanes) != 0 and len(static_map.next_lanes) != 0:
                 # in lanes, prolong with the virtual lanes in the junction
-                # TODO: consider when the numbers do not equal
+                # TODO: consider when the numbers do not equal, CHECK IT!
                 for i in range(min(len(static_map.virtual_lanes), len(static_map.next_lanes))):
                     if len(static_map.next_drivable_area.points) > 3:
                         point_x = static_map.next_lanes[i].central_path_points[0].position.x
@@ -146,6 +146,9 @@ class DrivingSpaceConstructor:
                         status_flag = 0.5 #loaded next junction
                         rospy.loginfo("extension successful, original length: %d, extended length: %d", \
                             original_length, len(static_map.virtual_lanes[i].central_path_points))
+                    else:
+                        status_flag = 0.5
+                        rospy.loginfo("enter false junction, only prolong by next lanes!")
 
                 for i in range(len(static_map.virtual_lanes)): #should be as many as next lanes
                     static_map.virtual_lanes[i].central_path_points.extend(static_map.next_lanes[i].central_path_points)
@@ -154,6 +157,9 @@ class DrivingSpaceConstructor:
 
             if len(static_map.lanes) == 0: #in junction, keep the virtual lanes
                 static_map.virtual_lanes = self._lanes_memory #jxy: check whether it will change as python
+
+        tstates.static_map_virtual_lane_path_array = get_lane_array(tstates.static_map.virtual_lanes)
+        tstates.static_map_virtual_lane_tangets = [[point.tangent for point in virtual_lane.central_path_points] for virtual_lane in tstates.static_map.virtual_lanes]
 
         #jxy1216: merge obstacle locator inside
         dynamic_map = tstates.dynamic_map # for easier access
@@ -182,18 +188,19 @@ class DrivingSpaceConstructor:
         #tstates.dynamic_map.jmap.obstacles = tstates.surrounding_object_list #no longer required
 
         # Update driving_space with tstate
+        if len(static_map.virtual_lanes) != 0:
+            self.locate_ego_vehicle_in_lanes(tstates) #TODO: consider ego_s and front/rear vehicle in virtual lanes!!
+            self.locate_surrounding_objects_in_lanes(tstates) # TODO: here lies too much repeated calculation, change it and lateral decision
+            self.locate_stop_sign_in_lanes(tstates)
+            self.locate_speed_limit_in_lanes(tstates)
+        else:
+            rospy.loginfo("virtual lanes not constructed")
+
         if static_map.in_junction or len(static_map.lanes) == 0:
             rospy.logdebug("In junction due to static map report junction location")
         else:
-            for lane in tstates.static_map.lanes:
-                self._driving_space.lanes.append(lane)
-            #jxy: why is target lane in static map?
-            self.locate_ego_vehicle_in_lanes(tstates) #TODO: consider ego_s and front/rear vehicle in virtual lanes!!
-            self.locate_surrounding_objects_in_lanes(tstates) # TODO: here lies too much repeated calculation, change it and lateral decision
             for i in range(STEPS):
-                self.locate_obstacle_in_lanes(tstates, i)
-            self.locate_stop_sign_in_lanes(tstates)
-            self.locate_speed_limit_in_lanes(tstates)
+                self.locate_obstacle_in_lanes(tstates, i) #real lanes
 
         t4 = time.time()
         
@@ -258,16 +265,6 @@ class DrivingSpaceConstructor:
         dy1 = path[-1].position.y - path[-2].position.y
         dx2 = exit_junction_direction[0]
         dy2 = exit_junction_direction[1]
-        
-        print "extension params:"
-        print x1
-        print y1
-        print x2
-        print y2
-        print dx1
-        print dy1
-        print dx2
-        print dy2
 
         #change coordinate, plan a 3rd polyline
         l = math.sqrt(math.pow((x1 - x2), 2) + math.pow((y1 - y2), 2))
@@ -292,39 +289,61 @@ class DrivingSpaceConstructor:
 
     # ========= For in lane =========
 
-    def locate_object_in_lane(self, object, tstates, dimension, dist_list=None):
+    def locate_object_in_lane(self, object, tstates, dimension, dist_list=None, virtual_flag=0):
         '''
         Calculate (continuous) lane index for a object.
         Parameters: dist_list is the distance buffer. If not provided, it will be calculated
         '''
 
-        if not dist_list:
-            dist_list = np.array([dist_from_point_to_polyline2d(
-                object.pose.pose.position.x,
-                object.pose.pose.position.y,
-                lane) for lane in tstates.static_map_lane_path_array]) # here lane is a python list of (x, y)
+        if virtual_flag == 1:
+            if not dist_list:
+                dist_list = np.array([dist_from_point_to_polyline2d(
+                    object.pose.pose.position.x,
+                    object.pose.pose.position.y,
+                    lane) for lane in tstates.static_map_virtual_lane_path_array]) # here lane is a python list of (x, y)
+        else:
+            if not dist_list:
+                dist_list = np.array([dist_from_point_to_polyline2d(
+                    object.pose.pose.position.x,
+                    object.pose.pose.position.y,
+                    lane) for lane in tstates.static_map_lane_path_array]) # here lane is a python list of (x, y)
         
         # Check if there's only two lanes
-        if len(tstates.static_map.lanes) < 2:
+        if virtual_flag == 1:
+            lanes_consider = tstates.static_map.virtual_lanes
+        else:
+            lanes_consider = tstates.static_map.lanes
+
+        if len(lanes_consider) < 2:
             closest_lane = second_closest_lane = 0
         else:
             closest_lane, second_closest_lane = np.abs(dist_list[:, 0]).argsort()[:2]
 
         # Signed distance from target to two closest lane
+
         closest_lane_dist, second_closest_lane_dist = dist_list[closest_lane, 0], dist_list[second_closest_lane, 0]
 
         if abs(closest_lane_dist) > self._lane_dist_thres:
-            return -1, -99, -99, -99, -99 # TODO: return reasonable value
+            return -1, -99, -99, -99, -99
 
-        lane = tstates.static_map.lanes[closest_lane]
+        if virtual_flag == 1:
+            lane = tstates.static_map.virtual_lanes[closest_lane]
+        else:
+            lane = tstates.static_map.lanes[closest_lane]
         left_boundary_array = np.array([(lbp.boundary_point.position.x, lbp.boundary_point.position.y) for lbp in lane.left_boundaries])
         right_boundary_array = np.array([(lbp.boundary_point.position.x, lbp.boundary_point.position.y) for lbp in lane.right_boundaries])
 
         if len(left_boundary_array) == 0:
-            ffstate = get_frenet_state(object,
-                            tstates.static_map_lane_path_array[closest_lane],
-                            tstates.static_map_lane_tangets[closest_lane]
-                        )
+            if virtual_flag == 1:
+                ffstate = get_frenet_state(object,
+                                tstates.static_map_virtual_lane_path_array[closest_lane],
+                                tstates.static_map_virtual_lane_tangets[closest_lane]
+                            )
+            else:
+                ffstate = get_frenet_state(object,
+                                tstates.static_map_lane_path_array[closest_lane],
+                                tstates.static_map_lane_tangets[closest_lane]
+                            )
             lane_anglediff = ffstate.psi
             lane_dist_s = ffstate.s
             return closest_lane, -1, -1, lane_anglediff, lane_dist_s
@@ -387,11 +406,17 @@ class DrivingSpaceConstructor:
                 if np.min(dist_left_list) * np.max(dist_right_list) >= 0:
                     # the object is out of the road
                     closest_lane = -1
-                
-            ffstate = get_frenet_state(object,
-                            tstates.static_map_lane_path_array[closest_lane],
-                            tstates.static_map_lane_tangets[closest_lane]
-                        )
+            
+            if virtual_flag == 1:
+                ffstate = get_frenet_state(object,
+                                tstates.static_map_virtual_lane_path_array[closest_lane],
+                                tstates.static_map_virtual_lane_tangets[closest_lane]
+                            )
+            else:
+                ffstate = get_frenet_state(object,
+                                tstates.static_map_lane_path_array[closest_lane],
+                                tstates.static_map_lane_tangets[closest_lane]
+                            )
             lane_anglediff = ffstate.psi
             lane_dist_s = ffstate.s # this is also helpful in getting ego s coordinate in the road
 
@@ -431,7 +456,7 @@ class DrivingSpaceConstructor:
                     vehicle.state.pose.pose.position.x,
                     vehicle.state.pose.pose.position.y,
                     lane, return_end_distance=True)
-                    for lane in tstates.static_map_lane_path_array])
+                    for lane in tstates.static_map_virtual_lane_path_array])
                 closest_lane = np.argmin(np.abs(dist_list[:, 0]))
 
                 # Determine if the vehicle is close to lane enough
@@ -455,8 +480,8 @@ class DrivingSpaceConstructor:
                     front_vehicle_idx = int(front_vehicles[vehicle_row, 0])
                     front_vehicle = tstates.surrounding_object_list[front_vehicle_idx]
                     front_vehicle.ffstate = get_frenet_state(front_vehicle.state,
-                        tstates.static_map_lane_path_array[lane_id],
-                        tstates.static_map_lane_tangets[lane_id]
+                        tstates.static_map_virtual_lane_path_array[lane_id],
+                        tstates.static_map_virtual_lane_tangets[lane_id]
                     )
                     # Here we use relative frenet coordinate
                     front_vehicle.ffstate.s = self._ego_vehicle_distance_to_lane_tail[lane_id] - front_vehicles[vehicle_row, 1]
@@ -476,8 +501,8 @@ class DrivingSpaceConstructor:
                     rear_vehicle_idx = int(rear_vehicles[vehicle_row, 0])
                     rear_vehicle = tstates.surrounding_object_list[rear_vehicle_idx]
                     rear_vehicle.ffstate = get_frenet_state(rear_vehicle.state,
-                        tstates.static_map_lane_path_array[lane_id],
-                        tstates.static_map_lane_tangets[lane_id]
+                        tstates.static_map_virtual_lane_path_array[lane_id],
+                        tstates.static_map_virtual_lane_tangets[lane_id]
                     )
                     # Here we use relative frenet coordinate
                     rear_vehicle.ffstate.s = rear_vehicles[vehicle_row, 1] - self._ego_vehicle_distance_to_lane_head[lane_id] # negative value
@@ -492,7 +517,7 @@ class DrivingSpaceConstructor:
                                 rear_vehicle.ffstate.s)
 
     def locate_ego_vehicle_in_lanes(self, tstates, lane_end_dist_thres=2, lane_dist_thres=5):
-        dist_list = np.array([dist_from_point_to_polyline2d(
+        dist_list_real = np.array([dist_from_point_to_polyline2d(
             tstates.ego_vehicle_state.state.pose.pose.position.x, tstates.ego_vehicle_state.state.pose.pose.position.y,
             lane, return_end_distance=True)
             for lane in tstates.static_map_lane_path_array])
@@ -500,12 +525,15 @@ class DrivingSpaceConstructor:
         ego_dimension.length_x = 4.0
         ego_dimension.length_y = 2.0 #jxy: I don't know
         ego_dimension.length_z = 1.8
-        ego_lane_index, _, _, _, ego_s = self.locate_object_in_lane(tstates.ego_vehicle_state.state, tstates, ego_dimension)
-        #TODO: should be added to converted ego msg
+
+        ego_lane_index, _, _, _, ego_s = self.locate_object_in_lane(tstates.ego_vehicle_state.state, tstates, ego_dimension, virtual_flag=1)
         ego_lane_index_rounded = int(round(ego_lane_index))
 
-        self._ego_vehicle_distance_to_lane_head = dist_list[:, 3]
-        self._ego_vehicle_distance_to_lane_tail = dist_list[:, 4]
+        self._ego_vehicle_distance_to_lane_head = np.array([0, 0, 0, 0, 0])
+        self._ego_vehicle_distance_to_lane_tail = np.array([0, 0, 0, 0, 0])
+        if len(dist_list_real) != 0:
+            self._ego_vehicle_distance_to_lane_head = dist_list_real[:, 3]
+            self._ego_vehicle_distance_to_lane_tail = dist_list_real[:, 4]
 
         #from obstacle locator
         tstates.ego_s = ego_s
@@ -518,8 +546,8 @@ class DrivingSpaceConstructor:
         else:
             tstates.dynamic_map.model = MapState.MODEL_MULTILANE_MAP
             tstates.dynamic_map.ego_ffstate = get_frenet_state(tstates.ego_vehicle_state, 
-                tstates.static_map_lane_path_array[ego_lane_index_rounded],
-                tstates.static_map_lane_tangets[ego_lane_index_rounded])
+                tstates.static_map_virtual_lane_path_array[ego_lane_index_rounded],
+                tstates.static_map_virtual_lane_tangets[ego_lane_index_rounded])
             tstates.dynamic_map.mmap.ego_lane_index = ego_lane_index
             tstates.dynamic_map.mmap.distance_to_junction = self._ego_vehicle_distance_to_lane_tail[ego_lane_index_rounded]
         rospy.logdebug("Distance to end: (lane %f) %f", ego_lane_index, self._ego_vehicle_distance_to_lane_tail[ego_lane_index_rounded])
@@ -531,23 +559,23 @@ class DrivingSpaceConstructor:
         lights = tstates.traffic_light_detection.detections
         #jxy: demanding that the lights are in the same order as the lanes.
 
-        total_lane_num = len(tstates.static_map.lanes)
+        total_lane_num = len(tstates.static_map.virtual_lanes)
         if len(lights) == 1:
             for i in range(total_lane_num):
                 if lights[0].signal == ObjectSignals.TRAFFIC_LIGHT_RED:
-                    tstates.static_map.lanes[i].map_lane.stop_state = Lane.STOP_STATE_STOP
+                    tstates.static_map.virtual_lanes[i].map_lane.stop_state = Lane.STOP_STATE_STOP
                 elif lights[0].signal == ObjectSignals.TRAFFIC_LIGHT_YELLOW:
-                    tstates.static_map.lanes[i].map_lane.stop_state = Lane.STOP_STATE_YIELD
+                    tstates.static_map.virtual_lanes[i].map_lane.stop_state = Lane.STOP_STATE_YIELD
                 elif lights[0].signal == ObjectSignals.TRAFFIC_LIGHT_GREEN:
-                    tstates.static_map.lanes[i].map_lane.stop_state = Lane.STOP_STATE_THRU
+                    tstates.static_map.virtual_lanes[i].map_lane.stop_state = Lane.STOP_STATE_THRU
         elif len(lights) > 1 and len(lights) == total_lane_num:
             for i in range(total_lane_num):
                 if lights[i].signal == ObjectSignals.TRAFFIC_LIGHT_RED:
-                    tstates.static_map.lanes[i].map_lane.stop_state = Lane.STOP_STATE_STOP
+                    tstates.static_map.virtual_lanes[i].map_lane.stop_state = Lane.STOP_STATE_STOP
                 elif lights[i].signal == ObjectSignals.TRAFFIC_LIGHT_YELLOW:
-                    tstates.static_map.lanes[i].map_lane.stop_state = Lane.STOP_STATE_YIELD
+                    tstates.static_map.virtual_lanes[i].map_lane.stop_state = Lane.STOP_STATE_YIELD
                 elif lights[i].signal == ObjectSignals.TRAFFIC_LIGHT_GREEN:
-                    tstates.static_map.mmap.lanes[i].map_lane.stop_state = Lane.STOP_STATE_THRU
+                    tstates.static_map.virtual_lanes[i].map_lane.stop_state = Lane.STOP_STATE_THRU
         elif len(lights) > 1 and len(lights) != total_lane_num:
             red = True
             for i in range(len(lights)):
@@ -555,9 +583,9 @@ class DrivingSpaceConstructor:
                     red = False
             for i in range(total_lane_num):
                 if red:
-                    tstates.static_map.lanes[i].map_lane.stop_state = Lane.STOP_STATE_STOP
+                    tstates.static_map.virtual_lanes[i].map_lane.stop_state = Lane.STOP_STATE_STOP
                 else:
-                    tstates.static_map.lanes[i].map_lane.stop_state = Lane.STOP_STATE_THRU
+                    tstates.static_map.virtual_lanes[i].map_lane.stop_state = Lane.STOP_STATE_THRU
         
     def locate_stop_sign_in_lanes(self, tstates):
         '''
@@ -572,7 +600,7 @@ class DrivingSpaceConstructor:
         '''
         # TODO(zhcao): Change the speed limit according to the map or the traffic sign(perception)
         # Now we set the multilane speed limit as 40 km/h.
-        total_lane_num = len(tstates.static_map.lanes)
+        total_lane_num = len(tstates.static_map.virtual_lanes)
         for i in range(total_lane_num):
             tstates.dynamic_map.mmap.lanes[i].map_lane.speed_limit = 15
 
@@ -583,7 +611,7 @@ class DrivingSpaceConstructor:
         '''
 
         dist_list = np.array([dist_from_point_to_polyline2d(vehicle.state.pose.pose.position.x, vehicle.state.pose.pose.position.y, lane)
-            for lane in tstates.static_map_lane_path_array])
+            for lane in tstates.static_map_virtual_lane_path_array])
         dist_list = np.abs(dist_list)
         closest_lane = dist_list[:, 0].argsort()[0]
         closest_idx = int(dist_list[closest_lane, 1])
@@ -626,10 +654,10 @@ class DrivingSpaceConstructor:
                 tempmarker.type = Marker.LINE_STRIP
                 tempmarker.action = Marker.ADD
                 tempmarker.scale.x = 0.12
-                tempmarker.color.r = 1.0
-                tempmarker.color.g = 0.0
-                tempmarker.color.b = 0.0
-                tempmarker.color.a = 0.5
+                tempmarker.color.r = 0.0
+                tempmarker.color.g = 0.7
+                tempmarker.color.b = 0.7
+                tempmarker.color.a = 0.7
                 tempmarker.lifetime = rospy.Duration(0.5)
 
                 for lanepoint in lane.central_path_points:

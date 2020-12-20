@@ -100,7 +100,7 @@ class Werling(object):
         
         if self.initialize_frenet_path(dynamic_map):
             self.all_trajectory = []
-            self._ego_lane_index = ego_lane_index
+            self._ego_lane_index = ego_lane_index #jxy: note that it is not the ego_lane_index in dmap, but a given num
             start_state = self.calculate_start_state(dynamic_map)
             generated_trajectory, local_desired_speed = self.frenet_optimal_planning(self.csp, self.c_speed, start_state, \
                 target_speed, dynamic_boundary)
@@ -280,8 +280,8 @@ class Werling(object):
             fp_back_x = 2 * fp.x[i] - fp_front_x
             fp_back_y = 2 * fp.y[i] - fp_front_y
 
-            dist1, closest_id0, closest_type0, = dist_from_point_to_closedpolyline2d(fp_front_x, fp_front_y, boundary_xy_array)
-            dist0, closest_id1, closest_type1, = dist_from_point_to_closedpolyline2d(fp_back_x, fp_back_y, boundary_xy_array)
+            dist0, closest_id0, closest_type0, = dist_from_point_to_closedpolyline2d(fp_front_x, fp_front_y, boundary_xy_array)
+            dist1, closest_id1, closest_type1, = dist_from_point_to_closedpolyline2d(fp_back_x, fp_back_y, boundary_xy_array)
             #TODO: check the calculation time (about 0.1ms), if possible, check 4 corners.
 
             #calculate safety radius by boundary type, boundary velocity and ego velocity
@@ -321,24 +321,22 @@ class Werling(object):
                     radius1 = ROBOT_RADIUS + c_speed * RADIUS_SPEED_RATIO + \
                         (np.linalg.norm([boundary[next_id].vx, boundary[next_id].vy]) - STANDARD_SPEED) * RADIUS_SPEED_RATIO * 0.5
 
-            if dist0 <= 0 and i == 0:
+            if (dist0 <= 0 or dist1 <= 0) and i == 0:
                 print "still not entered the dynamic boundary"
-                return True            
+                return True
+
+            if (-55 < fp_front_x < -45 and 17 < fp_front_y < 27) or (25 < fp_front_x < 35 and 25 < fp_front_y < 35):
+                rospy.loginfo("We are in false junction!!")
+                return True
 
             #TODO: false junction fix for Town05
 
             #collision check
-            if dist0 <= radius0 or dist1 <= radius1:
-                #TODO: check direction: if we are leaving this boundary section, it will not collide.
-                direction = np.array([fp_front_x - fp_back_x, fp_front_y - fp_back_y])
-                if np.dot(direction, np.array([fp_front_x - boundary[closest_id0].x, fp_front_y - boundary[closest_id0].y])) > 0:
-                    print "front leaving collision point!"
-                    continue
-                elif np.dot(direction, np.array([fp_back_x - boundary[closest_id1].x, fp_back_y - boundary[closest_id1].y])) > 0:
-                    print "back leaving collision point!"
-                    continue
+            if dist0 <= 0:
                 print "check collision fail!"
+                return False
 
+            if dist0 <= radius0 or dist1 <= radius1:
                 print "boundary_xy_array:"
                 print boundary_xy_array
 
@@ -360,6 +358,17 @@ class Werling(object):
                 print "closest point 1:"
                 print boundary[closest_id1].x
                 print boundary[closest_id1].y
+
+                #TODO: check direction: if we are leaving this boundary section, it will not collide.
+                direction = np.array([fp_front_x - fp_back_x, fp_front_y - fp_back_y])
+                if np.dot(direction, np.array([fp_front_x - boundary[closest_id0].x, fp_front_y - boundary[closest_id0].y])) > 0:
+                    print "front leaving collision point!"
+                    continue
+                elif np.dot(direction, np.array([fp_back_x - boundary[closest_id1].x, fp_back_y - boundary[closest_id1].y])) > 0:
+                    print "back leaving collision point!"
+                    continue
+                
+                print "check collision fail!"
                 return False
 
         print "check collision OK!"
