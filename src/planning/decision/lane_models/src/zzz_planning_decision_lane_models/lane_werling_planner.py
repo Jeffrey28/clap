@@ -277,7 +277,8 @@ class Werling(object):
 
     def check_collision(self, fp, dynamic_boundary, c_speed):
 
-        for i in range(min(STEPS, len(fp.x))):
+        #for i in range(min(STEPS, len(fp.x))):
+        for i in range(STEPS):
             boundary = dynamic_boundary[i].boundary
             boundary_xy_list = []
             for bp in boundary:
