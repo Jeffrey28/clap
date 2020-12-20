@@ -95,20 +95,6 @@ class Werling(object):
             Frenetrefx = self.ref_path[:,0]
             Frenetrefy = self.ref_path[:,1]
             tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
-
-    def prolong_frenet_path(self, added_path):
-
-        rospy.loginfo("prolong frenet path in the junction:")
-        rospy.loginfo("added path length: %d", len(added_path))
-        rospy.loginfo("original path length: %d", len(self.ref_path))
-        added_path_ori = convert_path_to_ndarray(added_path)
-        added_path_densed = dense_polyline2d(added_path_ori, 2)
-
-        self.ref_path = np.vstack((self.ref_path, added_path_densed))
-
-        Frenetrefx = self.ref_path[:,0]
-        Frenetrefy = self.ref_path[:,1]
-        tx, ty, tyaw, tc, self.csp = self.generate_target_course(Frenetrefx,Frenetrefy)
     
     def trajectory_update(self, dynamic_map, dynamic_boundary, target_speed, ego_lane_index):
         
@@ -125,8 +111,12 @@ class Werling(object):
 
             self.rivz_element.candidates_trajectory = self.rivz_element.put_trajectory_into_marker(self.all_trajectory)
             local_desired_speed = local_desired_speed[:len(trajectory_array)]
+            print "trajectory length:"
+            print len(trajectory_array)
             print "local desired speed:"
             print local_desired_speed
+            if len(local_desired_speed) == 0:
+                local_desired_speed.append(0)
             return trajectory_array, local_desired_speed
         else:
             return None, None
@@ -277,8 +267,7 @@ class Werling(object):
 
     def check_collision(self, fp, dynamic_boundary, c_speed):
 
-        #for i in range(min(STEPS, len(fp.x))):
-        for i in range(STEPS):
+        for i in range(min(STEPS, len(fp.x))):
             boundary = dynamic_boundary[i].boundary
             boundary_xy_list = []
             for bp in boundary:

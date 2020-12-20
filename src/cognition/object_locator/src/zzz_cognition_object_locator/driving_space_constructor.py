@@ -147,13 +147,13 @@ class DrivingSpaceConstructor:
                         rospy.loginfo("extension successful, original length: %d, extended length: %d", \
                             original_length, len(static_map.virtual_lanes[i].central_path_points))
 
-                self._lanes_memory = static_map.virtual_lanes
-
-            if len(static_map.lanes) == 0: #in junction, prolong with next lanes
-                static_map.virtual_lanes = self._lanes_memory #jxy: check whether it will change as python
                 for i in range(len(static_map.virtual_lanes)): #should be as many as next lanes
                     static_map.virtual_lanes[i].central_path_points.extend(static_map.next_lanes[i].central_path_points)
-        
+
+                self._lanes_memory = static_map.virtual_lanes
+
+            if len(static_map.lanes) == 0: #in junction, keep the virtual lanes
+                static_map.virtual_lanes = self._lanes_memory #jxy: check whether it will change as python
 
         #jxy1216: merge obstacle locator inside
         dynamic_map = tstates.dynamic_map # for easier access
@@ -259,7 +259,7 @@ class DrivingSpaceConstructor:
         dx2 = exit_junction_direction[0]
         dy2 = exit_junction_direction[1]
         
-        print "params:"
+        print "extension params:"
         print x1
         print y1
         print x2
@@ -512,7 +512,7 @@ class DrivingSpaceConstructor:
         if ego_lane_index < 0 or self._ego_vehicle_distance_to_lane_tail[ego_lane_index_rounded] <= lane_end_dist_thres:
             # Drive into junction, wait until next map
             rospy.logdebug("Cognition: Ego vehicle close to intersection, ego_lane_index = %f, dist_to_lane_tail = %f", ego_lane_index, self._ego_vehicle_distance_to_lane_tail[int(ego_lane_index)])
-            #tstates.dynamic_map.model = MapState.MODEL_JUNCTION_MAP
+            tstates.dynamic_map.model = MapState.MODEL_JUNCTION_MAP
             # TODO: Calculate frenet coordinate here or in put_buffer?
             return
         else:
@@ -920,9 +920,9 @@ class DrivingSpaceConstructor:
         self._drivable_area_markerarray = MarkerArray()
 
         count = 0
-        if len(tstates.drivable_area_timelist[5]) != 0:
+        if len(tstates.drivable_area_timelist[0]) != 0:
 
-            for i in range(len(tstates.drivable_area_timelist[5])):
+            for i in range(len(tstates.drivable_area_timelist[0])):
                 
                 #part 1: boundary section
                 tempmarker = Marker() #jxy: must be put inside since it is python
@@ -936,7 +936,7 @@ class DrivingSpaceConstructor:
                 tempmarker.color.a = 0.5
                 tempmarker.lifetime = rospy.Duration(0.5)
 
-                point = tstates.drivable_area_timelist[5][i]
+                point = tstates.drivable_area_timelist[0][i]
                 p = Point()
                 p.x = point[0]
                 p.y = point[1]
@@ -944,10 +944,10 @@ class DrivingSpaceConstructor:
                 tempmarker.points.append(p)
 
                 next_id = i + 1
-                if next_id >= len(tstates.drivable_area_timelist[5]):
-                    next_id = 0
+                if next_id >= len(tstates.drivable_area_timelist[0]):
+                    continue #closed line, the first point equal to the last point
 
-                next_point = tstates.drivable_area_timelist[5][next_id]
+                next_point = tstates.drivable_area_timelist[0][next_id]
                 p = Point()
                 p.x = next_point[0]
                 p.y = next_point[1]

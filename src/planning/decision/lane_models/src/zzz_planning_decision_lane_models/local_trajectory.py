@@ -421,6 +421,7 @@ class Werling_planner(object):
 
     def build_frenet_lane(self, dynamic_map, static_map):
         if len(self.lanes) > 0:
+            rospy.logerr("Frenet lane building failed")
             return
 
         lane_num = len(dynamic_map.mmap.lanes)
@@ -429,6 +430,9 @@ class Werling_planner(object):
             extend_centrol_path = self.extend_path(central_path)
             #extend_path2 = self.extend_junction_path(extend_centrol_path, exit_junction_point, exit_junction_direction)
             self.lanes.append(Werling(extend_centrol_path,lane_idx,lane_num))
+            rospy.loginfo("built lane length: %d", len(extend_centrol_path))
+
+        rospy.loginfo("Frenet lane built, lane num %d", lane_num)
 
     def calc_exit_point(self, dynamic_map, static_map):
         global_path = dynamic_map.jmap.reference_path.map_lane.central_path_points

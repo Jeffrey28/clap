@@ -101,7 +101,7 @@ def calculate_drivable_areas(tstates, tt):
             lane_sections[i, 3] = 0 #vy in front
             lane_sections[i, 4] = 0 #vx behind
             lane_sections[i, 5] = 0 #vy behind
-            #TODO: projection to the vertial direction
+            #TODO: projection to the vertical direction
 
         next_static_area = []
         
@@ -163,6 +163,7 @@ def calculate_drivable_areas(tstates, tt):
         else:
             for i in range(len(tstates.static_map.drivable_area.points)):
                 node_point = tstates.static_map.drivable_area.points[i]
+                #jxy202012: clockwise, so the counterclockwise next lanes can only be inserted in a reversed static area line
                 key_node_list.append([node_point.x, node_point.y])
 
     else:
@@ -240,7 +241,7 @@ def calculate_drivable_areas(tstates, tt):
             lane = tstates.static_map.lanes[0]
             lane_section_points_generation(lane_sections[0, 0], lane_sections[0, 1], lane_sections[0, 2], \
                 lane_sections[0, 3], lane_sections[0, 4], lane_sections[0, 5],lane.right_boundaries, key_node_list)
-            for i in range(len(next_key_node_list)):
+            for i in range(1, len(next_key_node_list)): #jxy202012: the first is the joint point, thus neglect
                 ii = i + joint_point2_index
                 if ii >= len(next_key_node_list):
                     ii = ii - len(next_key_node_list)
@@ -481,8 +482,8 @@ def calculate_drivable_areas(tstates, tt):
     
     
     #close the figure
-    # if len(temp_drivable_area) > 0:
-    #     temp_drivable_area.append(temp_drivable_area[0])
+    if len(temp_drivable_area) > 0:
+        temp_drivable_area.append(temp_drivable_area[0])
 
     tstates.drivable_area_timelist.append(temp_drivable_area)
 

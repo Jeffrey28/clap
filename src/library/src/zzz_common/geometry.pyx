@@ -154,7 +154,7 @@ cpdef dist_from_point_to_polyline2d(float x0, float y0, np.ndarray line, bint re
 
 cpdef dist_from_point_to_closedpolyline2d(float x0, float y0, np.ndarray line, bint return_end_distance=False):
     """
-    Calculate distance from point to a closed polyline (2D, no start or end, a closed circle)
+    Calculate distance from point to a closed polyline (2D, a closed circle, the last point equal to the first point)
 
     :param (x0,y0): target point
     :type (x0,y0): float, float
