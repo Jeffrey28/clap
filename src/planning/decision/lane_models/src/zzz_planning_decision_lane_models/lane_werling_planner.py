@@ -125,6 +125,8 @@ class Werling(object):
 
             self.rivz_element.candidates_trajectory = self.rivz_element.put_trajectory_into_marker(self.all_trajectory)
             local_desired_speed = local_desired_speed[:len(trajectory_array)]
+            print "local desired speed:"
+            print local_desired_speed
             return trajectory_array, local_desired_speed
         else:
             return None, None
@@ -133,9 +135,10 @@ class Werling(object):
 
         try:
             if self.csp is None:
-                self.build_frenet_path()
+                self.build_frenet_path() #jxy: ? this must fail, why?
             return True
         except:
+            rospy.logerr("initialize frenet path fail!")
             return False
 
     def calculate_start_state(self, dynamic_map):
@@ -345,6 +348,28 @@ class Werling(object):
                     print "back leaving collision point!"
                     continue
                 print "check collision fail!"
+
+                print "boundary_xy_array:"
+                print boundary_xy_array
+
+                print "dist0:"
+                print dist0
+                print "dist1:"
+                print dist1
+                print "fp_front_x:"
+                print fp_front_x
+                print "fp_front_y:"
+                print fp_front_y
+                print "fp_back_x:"
+                print fp_back_x
+                print "fp_back_y:"
+                print fp_back_y
+                print "closest point 0:"
+                print boundary[closest_id0].x
+                print boundary[closest_id0].y
+                print "closest point 1:"
+                print boundary[closest_id1].x
+                print boundary[closest_id1].y
                 return False
 
         print "check collision OK!"

@@ -920,9 +920,9 @@ class DrivingSpaceConstructor:
         self._drivable_area_markerarray = MarkerArray()
 
         count = 0
-        if len(tstates.drivable_area_timelist[0]) != 0:
+        if len(tstates.drivable_area_timelist[5]) != 0:
 
-            for i in range(len(tstates.drivable_area_timelist[0])):
+            for i in range(len(tstates.drivable_area_timelist[5])):
                 
                 #part 1: boundary section
                 tempmarker = Marker() #jxy: must be put inside since it is python
@@ -936,7 +936,7 @@ class DrivingSpaceConstructor:
                 tempmarker.color.a = 0.5
                 tempmarker.lifetime = rospy.Duration(0.5)
 
-                point = tstates.drivable_area_timelist[0][i]
+                point = tstates.drivable_area_timelist[5][i]
                 p = Point()
                 p.x = point[0]
                 p.y = point[1]
@@ -944,10 +944,10 @@ class DrivingSpaceConstructor:
                 tempmarker.points.append(p)
 
                 next_id = i + 1
-                if next_id >= len(tstates.drivable_area_timelist[0]):
+                if next_id >= len(tstates.drivable_area_timelist[5]):
                     next_id = 0
 
-                next_point = tstates.drivable_area_timelist[0][next_id]
+                next_point = tstates.drivable_area_timelist[5][next_id]
                 p = Point()
                 p.x = next_point[0]
                 p.y = next_point[1]
